@@ -37,7 +37,7 @@ class ScrapeProvenanceSpec(unittest.TestCase):
     def test_schema_block_carries_source_field(self):
         step4 = self.steps.get("Step 4: Deduplicate & Store", "")
         self.assertIn(
-            '"source": "cli/websearch"',
+            '"source": "cli/websearch/browser"',
             step4,
             "the seen_jobs.json schema block lost the source (provenance) field",
         )

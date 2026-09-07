@@ -53,8 +53,16 @@ ALLOWED_PERMISSIONS = {
     "Bash(python3 salary_lookup.py:*)",
     "Bash(python tools/rank_state.py:*)",
     "Bash(python3 tools/rank_state.py:*)",
+    "Bash(py -3 tools/rank_state.py:*)",
+    "Bash(.venv/Scripts/python.exe tools/rank_state.py:*)",
+    "Bash(.venv/Scripts/python.exe salary_lookup.py:*)",
+    "Bash(python tools/job_state.py:*)",
+    "Bash(python3 tools/job_state.py:*)",
+    "Bash(py -3 tools/job_state.py:*)",
+    "Bash(.venv/Scripts/python.exe tools/job_state.py:*)",
     "Bash(python tools/verify_pdf.py:*)",
     "Bash(python3 tools/verify_pdf.py:*)",
+    "Bash(.venv/Scripts/python.exe tools/verify_pdf.py:*)",
     "Bash(pdftotext:*)",
 }
 
@@ -88,6 +96,11 @@ REQUIRED_IGNORE_RULES = [
     "job_search_tracker.csv",
     "gmail_sync/",
     "reports/",
+    # Local browser/page captures and per-run scrape evidence can reveal the
+    # candidate's search activity even when they contain no contact details.
+    "/app_*.txt",
+    "/www_*.txt",
+    "/job_scraper/run_*/",
     "upskill/*.md",
     # Depth-independent twin of the rule above. The upskill *skill* resolves
     # `upskill/` relative to its own directory - the same observed behavior

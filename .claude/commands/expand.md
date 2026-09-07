@@ -166,6 +166,12 @@ Wait for the user's response before writing anything.
 
 ## Step 5: Write Confirmed Additions
 
+Before durable profile writes, resolve consequential source conflicts under
+[job-search model routing](../../.agents/skills/luna-sol-routing/references/job-search-workflow.md).
+Use `semantic_resolution_v1` only when a separate judgment adds value; ordinary
+extraction stays with the owner. Preserve FLAG/ASK_USER for unsupported or disputed
+facts and never infer a candidate fact.
+
 Apply only the confirmed items. Use the Edit tool to add to the relevant sections of each file — do not rewrite entire files.
 
 ### Additions to `01-candidate-profile.md`

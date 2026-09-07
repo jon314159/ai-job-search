@@ -42,6 +42,12 @@ class HtmlReportCommandFileTests(unittest.TestCase):
         text = COMMAND_FILE.read_text(encoding="utf-8").strip()
         self.assertGreater(len(text), 100, "Command file appears suspiciously short")
 
+    def test_visual_qa_covers_responsive_layout_and_runtime_errors(self):
+        text = COMMAND_FILE.read_text(encoding="utf-8")
+        self.assertIn("desktop and narrow layouts", text)
+        self.assertIn("console errors", text)
+        self.assertIn("If visual inspection is unavailable, report that limitation", text)
+
 
 class HtmlReportTrackerFieldTests(unittest.TestCase):
     """The dashboard is a consumer of every tracker column: the Step 1 field

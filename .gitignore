@@ -26,6 +26,7 @@ salary_data.json
 **/job_scraper/seen_jobs.json
 **/job_scraper/notion_sync.json
 **/job_scraper/*.md
+**/job_scraper/postings/**
 *_BehavioralReport.pdf
 linkedin_Profile.pdf
 
@@ -92,6 +93,14 @@ gmail_sync/
 
 # Generated reports (personal output from /html-report)
 reports/
+
+# Temporary render and extraction artifacts
+tmp/
+
+# Generated local web captures and per-run scraper evidence
+/app_*.txt
+/www_*.txt
+/job_scraper/run_*/
 
 # Upskill reports (personal output). Depth-independent like the job_scraper
 # rules above: the upskill skill resolves `upskill/` relative to its own

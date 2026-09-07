@@ -1,10 +1,10 @@
 ---
-framework_version: 1.0.0
+framework_version: 1.1.0
 ---
 
 # Interview Preparation Guide
 
-<!-- SETUP: STAR examples are personalized by running /setup based on your actual experience -->
+<!-- Factual STAR evidence lives in 01; behavioral voice lives in 02. -->
 
 ## STAR Format
 
@@ -12,32 +12,14 @@ Structure answers as: **Situation** (context), **Task** (your responsibility), *
 
 Keep answers to 1-2 minutes. Be specific. End with what you learned or would do differently.
 
-## Ready-Made STAR Examples
+## Build the STAR Evidence Set at Runtime
 
-<!-- These are populated by /setup from your actual experience. Below are templates showing the format. -->
-
-### 1. [PROJECT_NAME] ([SKILL_DEMONSTRATED])
-**S:** [CONTEXT - what was happening, what was the problem]
-**T:** [YOUR RESPONSIBILITY - what you specifically needed to do]
-**A:** [WHAT YOU DID - specific actions, tools, methods]
-**R:** [OUTCOME - measurable results, adoption, impact]
-**Use for:** "[QUESTION_TYPE_1]", "[QUESTION_TYPE_2]"
-
-### 2. [PROJECT_NAME] ([SKILL_DEMONSTRATED])
-**S:** [CONTEXT]
-**T:** [YOUR RESPONSIBILITY]
-**A:** [WHAT YOU DID]
-**R:** [OUTCOME]
-**Use for:** "[QUESTION_TYPE_1]", "[QUESTION_TYPE_2]"
-
-### 3. [PROJECT_NAME] ([SKILL_DEMONSTRATED])
-**S:** [CONTEXT]
-**T:** [YOUR RESPONSIBILITY]
-**A:** [WHAT YOU DID]
-**R:** [OUTCOME]
-**Use for:** "[QUESTION_TYPE_1]", "[QUESTION_TYPE_2]"
-
-<!-- Add more STAR examples as needed. Aim for 4-6 covering different competencies. -->
+Read task-relevant factual examples from `01-candidate-profile.md` and behavioral/voice
+guidance from `02-behavioral-profile.md`. Select 3-4 examples that cover the posting's
+most important competencies. Preserve every evidence label (professional, academic,
+hypothetical, self-directed, coursework) and never turn planned work into measured
+results. If a factual S/T/A/R component is missing, mark it as a question for the user
+instead of filling it from inference. Do not persist candidate stories in this method file.
 
 ## Common Tough Questions
 
@@ -82,7 +64,7 @@ Keep answers to 1-2 minutes. Be specific. End with what you learned or would do 
 - "What do people who thrive here have in common?"
 
 ## Phone/Video Interview Tips
-- Have STAR examples written out (use this file)
+- Have the role-specific STAR evidence set written out
 - Keep a glass of water nearby
 - Smile when speaking (it changes your tone)
 - Ask for clarification if a question is vague

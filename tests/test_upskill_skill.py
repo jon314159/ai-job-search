@@ -110,7 +110,7 @@ class UpskillSkillSpec(unittest.TestCase):
 
     def test_step8_report_header_counts_both_sources(self):
         sections = _sections(SKILL.read_text(encoding="utf-8"))
-        step8 = sections.get("Step 8: Write and Save Report", "")
+        step8 = sections.get("Step 8: Present and, When Authorized, Save the Report", "")
         self.assertIn("T tracked, R ranked", step8)
 
     def test_important_rules_cover_untrusted_data_and_no_backfill(self):
@@ -126,6 +126,12 @@ class UpskillSkillSpec(unittest.TestCase):
             rules,
             "rules must forbid back-filling a missing gaps field by guessing",
         )
+
+    def test_conversational_advice_does_not_create_a_report_file(self):
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertIn("Do not activate\n  for generic study advice", text)
+        self.assertIn("For conversational advice, present the complete report", text)
+        self.assertIn("do not write a file unless the user asks", text)
 
     @unittest.skipUnless(
         _HAVE_YAML,

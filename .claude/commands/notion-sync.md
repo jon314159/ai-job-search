@@ -1,6 +1,12 @@
-# /notion-sync - Push Ranked Jobs and Applications to a Notion Database
+# /notion-sync - Publish a One-Way Notion View
 
-You are publishing a **read-only view** of the job search into the user's Notion workspace: one database row per job, with a detailed page per shortlisted match. The repo files stay the system of record - `job_scraper/seen_jobs.json` owns scraped/ranked jobs and `job_search_tracker.csv` owns applications. Notion is a disposable presentation layer on top of them; nothing ever syncs back.
+You are publishing a **one-way presentation view** of the job search into the user's
+Notion workspace: one database row per job, with a detailed page per shortlisted match.
+The command may create or update only the confirmed database/pages plus its gitignored
+local sync-state file. It never writes destination edits back into repository source
+data, deletes or shares pages, or uploads application-document contents. The repo files
+stay the system of record: `job_scraper/seen_jobs.json` owns scraped/ranked jobs and
+`job_search_tracker.csv` owns applications.
 
 This command requires the **Notion MCP server** (OAuth). It reads state, upserts pages, and stops - it never ranks, applies, or edits repo files. Notion is the in-tree reference binding; the sync contract itself is tool-agnostic (see "Adapting to Another Tool" at the end - only the two sections marked *(Notion binding)* are tool-specific).
 
@@ -54,7 +60,7 @@ Validate the cheap, local precondition before creating anything external. A run 
    { "database_id": "...", "database_url": "...", "last_sync": "YYYY-MM-DD" }
    ```
 2. If it exists, verify the database id still resolves in Notion. If the database was deleted, treat this as a first run.
-3. **First run:** search the workspace for a database named "Job Search Pipeline". If none exists, ask the user where to create it (top-level page or an existing page they name), then create it with exactly these properties:
+3. **First run:** search the workspace for a database named "Job Search Pipeline". If none exists, creating it is an external workspace mutation: ask the user for the exact parent location (top-level page or an existing page they name), then create it only inside that confirmed destination with exactly these properties:
 
    | Property | Type | Values / notes |
    |----------|------|----------------|
@@ -76,7 +82,7 @@ Validate the cheap, local precondition before creating anything external. A run 
 
    The tracker-sourced properties (Applied on, Channel, CV file, Cover letter) stay empty for jobs that have no tracker row. CV file and Cover letter fill in once `/apply` records the draft; Applied on stays empty until `/outcome` records the submission. Only filenames ever sync; document contents stay local.
 
-4. **Existing database with missing properties:** if the located database predates a schema addition (a property from the table above does not exist), add the missing properties to the database before upserting. Never remove or retype existing properties.
+4. **Existing database with missing properties:** if the located database predates a schema addition (a property from the table above does not exist), list the exact additions before making this external schema mutation, then add only those missing properties. Never remove or retype existing properties.
 5. Write `job_scraper/notion_sync.json` with the database id and URL. This file is personal state and is gitignored - never commit it.
 
 ---
@@ -102,7 +108,9 @@ The page body is what makes a row worth clicking. Build it **only from stored da
 
 1. **Fit summary** - a short section from `seen_jobs.json` fields: score, verdict, quick-fit level, first-seen and ranked dates. If the job is in the tracker, add the application timeline (date applied, channel, current status, dated notes from the `notes` column) and name the submitted documents from `cv_file`/`cover_letter_file` (filenames only - the documents themselves never sync). **When the status is `drafted`, write "drafted YYYY-MM-DD, not yet submitted" instead of a date applied, and call the files drafts rather than submitted documents** (page bodies are write-once - Step 4.3).
 2. **The posting** - WebFetch the job URL and write a readable digest: what the role is, key requirements, practical details (location, deadline, salary if stated). Retry a 403 with browser headers per `.claude/skills/job-application-assistant/09-web-research.md` first. If the fetch still fails or redirects to a listing page, write "Posting no longer available (checked YYYY-MM-DD)" - **never reconstruct a posting from memory**.
-3. **Links** - the posting URL; derive `<company>_<role>` by the **Subfolder naming** rule in `documents/README.md`, and if that archive exists locally, name its path (plain text - the destination cannot link into the filesystem).
+3. **Links** - the posting URL and the matched tracker row's `archive_path` when it exists
+   locally (plain text - the destination cannot link into the filesystem). Do not derive a
+   company+role path that can collide across applications.
 
 Keep the page under ~40 blocks; this is a briefing, not a mirror of the posting.
 

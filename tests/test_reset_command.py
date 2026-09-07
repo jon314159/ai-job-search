@@ -73,16 +73,20 @@ class TestResetCoversEveryDocumentsSubfolder(unittest.TestCase):
             f"so the user confirms a deletion list that omits them: {missing}",
         )
 
-    def test_delete_block_removes_every_subfolder(self):
-        deleted = set(re.findall(r"rm -r?f documents/(\w+)/", self.text))
-        missing = sorted(self.folders - deleted)
+    def test_execution_covers_every_subfolder_without_broad_rm(self):
+        execution = section(self.text, "### Documents reset", "## Step 4:")
+        missing = sorted(
+            folder for folder in self.folders if f"documents/{folder}/" not in execution
+        )
         self.assertEqual(
             missing,
             [],
-            "reset.md's delete block has no rm line for these documents/ "
-            'subfolders, yet the command then claims "The `documents/` '
-            f'folder is now empty.": {missing}',
+            "reset.md's execution section omits these documents/ subfolders: "
+            f"{missing}",
         )
+        self.assertNotIn("rm -rf", execution)
+        self.assertIn("resolved path", execution)
+        self.assertIn("containment check", execution)
 
 
 def section(text: str, start: str, end: str) -> str:
@@ -118,9 +122,11 @@ class TestResetCoversEveryPersonalizedSkillFile(unittest.TestCase):
         self.files = setup_step3_skill_files()
         # /setup must actually still name these targets, or every assertion
         # below would pass vacuously against an empty set.
-        self.assertGreaterEqual(len(self.files), 6, self.files)
-        self.assertIn("04-job-evaluation.md", self.files)
+        self.assertGreaterEqual(len(self.files), 3, self.files)
+        self.assertIn("01-candidate-profile.md", self.files)
+        self.assertIn("02-behavioral-profile.md", self.files)
         self.assertIn("search-queries.md", self.files)
+        self.assertNotIn("04-job-evaluation.md", self.files)
 
     def test_preview_lists_every_personalized_skill_file(self):
         preview = section(

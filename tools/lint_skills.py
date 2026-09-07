@@ -6,6 +6,8 @@ Run from anywhere: python tools/lint_skills.py
 Checks:
 - Every SKILL.md (.claude/skills/*, .agents/skills/*) has YAML frontmatter that
   parses, with non-empty `name` and `description` keys
+- Every `.agents` skill with an adjacent portal CLI declares
+  `skill_kind: portal-search` and a boolean `enabled` value
 - `allowed-tools` entries of the form `Bash(bun run <path> *)` point at files
   that exist (skill paths resolve relative to the repo root and to .agents/)
 - Every .claude/commands/*.md starts with a `# /<name>` title
@@ -52,6 +54,22 @@ def check_skill(path: Path) -> None:
     for key in ("name", "description"):
         if not data.get(key):
             errors.append(f"{rel(path)}: frontmatter missing required key '{key}'")
+
+    cli_manifest = path.parent / "cli" / "package.json"
+    if cli_manifest.is_file():
+        if data.get("skill_kind") != "portal-search":
+            errors.append(
+                f"{rel(path)}: portal CLI skill must declare "
+                "skill_kind: portal-search"
+            )
+        if not isinstance(data.get("enabled"), bool):
+            errors.append(
+                f"{rel(path)}: portal CLI skill must declare boolean enabled"
+            )
+    elif data.get("skill_kind") == "portal-search":
+        errors.append(
+            f"{rel(path)}: skill_kind portal-search requires cli/package.json"
+        )
 
     allowed = data.get("allowed-tools", "")
     if isinstance(allowed, str):

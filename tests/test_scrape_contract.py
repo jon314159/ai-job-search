@@ -75,18 +75,28 @@ class ScrapeSearchOutputContractTests(unittest.TestCase):
 
 
 
-# Step 4's storage schema, derived the same way as the Step 2 contract above:
-# the field list lives in the spec, never duplicated here, so a schema change
-# fails this test instead of silently agreeing with a stale copy.
-_STEP4_SCHEMA_BLOCK = re.compile(r"Add ALL fetched jobs.*?```json(.*?)```", re.DOTALL)
+# Step 4's storage schema is structurally scoped to that section and its
+# explicit seen_jobs.json fenced block.  This keeps harmless prose or heading
+# changes from redirecting the test to an unrelated JSON example.
+_STEP4_SECTION = re.compile(
+    r"^###\s+Step\s+4:\s+Deduplicate\s+&\s+Store\b(?P<section>.*?)(?=^###\s|\Z)",
+    re.DOTALL | re.MULTILINE,
+)
+_SEEN_SCHEMA_BLOCK = re.compile(
+    r"Use this additive structure:\s*```json(?P<schema>.*?)```",
+    re.DOTALL,
+)
 
 
 def derive_stored_fields() -> frozenset[str]:
     text = SCRAPER_SKILL.read_text(encoding="utf-8")
-    match = _STEP4_SCHEMA_BLOCK.search(text)
-    if match is None:
+    section = _STEP4_SECTION.search(text)
+    if section is None:
+        raise AssertionError("Step 4 section not found in job-scraper/SKILL.md")
+    schema = _SEEN_SCHEMA_BLOCK.search(section.group("section"))
+    if schema is None:
         raise AssertionError("Step 4 seen_jobs.json schema block not found in job-scraper/SKILL.md")
-    return frozenset(re.findall(r'"([a-z_]+)":', match.group(1)))
+    return frozenset(re.findall(r'"([a-z_]+)":', schema.group("schema")))
 
 
 class SeenJobsPostingDateTests(unittest.TestCase):
@@ -114,6 +124,12 @@ class SeenJobsPostingDateTests(unittest.TestCase):
             "posting's age is unrecoverable after the run that scraped it",
         )
 
+    def test_step4_schema_keeps_the_expected_base_fields(self):
+        self.assertGreaterEqual(
+            derive_stored_fields(),
+            {"title", "company", "url", "first_seen", "posted_date", "status"},
+        )
+
     def test_the_step2_date_field_survives_into_storage(self):
         contract = derive_contract_fields()
         self.assertIn("date", contract, "Step 2 no longer guarantees a posting date")
@@ -134,6 +150,37 @@ class SeenJobsPostingDateTests(unittest.TestCase):
             r"never infer a posting date",
             "posted_date must carry the same never-backfill rule as `deadline`",
         )
+
+
+class PortalDiscoveryContractTests(unittest.TestCase):
+    def test_only_cli_skills_are_typed_as_portals(self):
+        portal_skills = []
+        for skill in sorted((REPO_ROOT / ".agents" / "skills").glob("*/SKILL.md")):
+            text = skill.read_text(encoding="utf-8")
+            frontmatter = text.split("\n---", 1)[0]
+            has_cli = (skill.parent / "cli" / "package.json").is_file()
+            is_portal = "skill_kind: portal-search" in frontmatter
+            self.assertEqual(is_portal, has_cli, skill)
+            if is_portal:
+                self.assertRegex(frontmatter, r"(?m)^enabled: (true|false)\b")
+                portal_skills.append(skill.parent.name)
+        self.assertNotIn("luna-sol-routing", portal_skills)
+        self.assertEqual(len(portal_skills), 6)
+
+    def test_scraper_filters_frontmatter_before_loading_bodies(self):
+        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        discovery = text.split("#### 1b.", 1)[1].split("For each **enabled**", 1)[0]
+        self.assertIn("Inventory only the YAML frontmatter", discovery)
+        self.assertIn("ignore unrelated skills", discovery)
+        self.assertIn("Do not load a disabled portal's body", discovery)
+
+    def test_individual_portals_do_not_claim_generic_job_discovery(self):
+        for skill in PORTAL_CLIS:
+            frontmatter = (skill / "SKILL.md").read_text(encoding="utf-8").split("\n---", 1)[0]
+            compact = " ".join(frontmatter.split())
+            self.assertIn("Use only", compact, skill.name)
+            self.assertIn("/scrape selects this enabled portal", compact, skill.name)
+            self.assertRegex(compact, r"Generic (?:Denmark )?job discovery routes", skill.name)
 
 
 if __name__ == "__main__":

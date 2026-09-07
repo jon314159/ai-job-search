@@ -65,6 +65,15 @@ class CleanTreeTests(GuardRepoFixture):
 
 
 class PermissionGuardTests(GuardRepoFixture):
+    def test_reviewed_venv_permissions_are_exact_and_scoped(self):
+        expected = {
+            "Bash(.venv/Scripts/python.exe salary_lookup.py:*)",
+            "Bash(.venv/Scripts/python.exe tools/job_state.py:*)",
+            "Bash(.venv/Scripts/python.exe tools/verify_pdf.py:*)",
+        }
+        self.assertTrue(expected.issubset(security_guards.ALLOWED_PERMISSIONS))
+        self.assertNotIn("Bash(.venv/Scripts/python.exe:*)", security_guards.ALLOWED_PERMISSIONS)
+
     def test_wildcard_bash_permission_fails(self):
         self.write_settings(sorted(security_guards.ALLOWED_PERMISSIONS) + ["Bash(*)"])
         result = run_guards(self.root)
@@ -302,29 +311,15 @@ class GitignorePatternBehaviorTests(unittest.TestCase):
                 )
 
     def test_interview_prep_pack_is_ignored_at_the_path_the_command_writes(self):
-        # Derived, never copied: a hardcoded prep-pack path pins only that
-        # documents/applications/** still matches that shape - which the
-        # presence guard already catches - and stays green if /interview moves
-        # its output, leaving .gitignore's comment stale exactly the way #336
-        # found it. Reading the path back from the command spec is what makes
-        # the move fail here instead.
-        # Two fragments, not one literal: #329 split the path across Step 1
-        # (which derives the archive folder) and Step 3 (which names the file),
-        # so either half can move independently and each must be pinned.
-        folder = "documents/applications/<company>_<role>/"
-        filename = "interview_prep_<stage>.md"
         spec = (REPO_ROOT / ".claude" / "commands" / "interview.md").read_text(encoding="utf-8")
-        for fragment in (folder, filename):
-            # assertTrue, not assertIn: the haystack is the whole command spec,
-            # and dumping it buries the one sentence explaining the failure.
-            self.assertTrue(
-                fragment in spec,
-                f"/interview no longer writes {fragment}; .gitignore's comment is now stale",
-            )
-
-        path = folder.replace("<company>_<role>", "acme_data_scientist") + filename.replace(
-            "<stage>", "technical"
+        self.assertRegex(
+            spec,
+            r"tracker row's `application_id` and exact `archive_path`",
+            "/interview must use the matched tracker row's application_id and exact archive_path",
         )
+        self.assertIn("interview_prep_<stage>.md", spec)
+
+        path = "documents/applications/app_7f3c91d2/interview_prep_technical.md"
         result = subprocess.run(
             ["git", "-C", str(self.root), "check-ignore", "-v", path],
             capture_output=True,

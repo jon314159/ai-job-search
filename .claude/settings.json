@@ -12,8 +12,16 @@
       "Bash(python3 salary_lookup.py:*)",
       "Bash(python tools/rank_state.py:*)",
       "Bash(python3 tools/rank_state.py:*)",
+      "Bash(py -3 tools/rank_state.py:*)",
+      "Bash(.venv/Scripts/python.exe tools/rank_state.py:*)",
+      "Bash(.venv/Scripts/python.exe salary_lookup.py:*)",
+      "Bash(python tools/job_state.py:*)",
+      "Bash(python3 tools/job_state.py:*)",
+      "Bash(py -3 tools/job_state.py:*)",
+      "Bash(.venv/Scripts/python.exe tools/job_state.py:*)",
       "Bash(python tools/verify_pdf.py:*)",
       "Bash(python3 tools/verify_pdf.py:*)",
+      "Bash(.venv/Scripts/python.exe tools/verify_pdf.py:*)",
       "Bash(pdftotext:*)"
     ]
   }

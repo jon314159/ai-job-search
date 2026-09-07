@@ -109,6 +109,12 @@ class TestCli(unittest.TestCase):
         # No URL argument: must fail loudly rather than defaulting to "allowed".
         self.assertNotEqual(out.returncode, 0)
 
+    def test_add_portal_cannot_override_an_explicit_access_restriction(self):
+        spec = (REPO_ROOT / ".claude" / "commands" / "add-portal.md").read_text(encoding="utf-8")
+        self.assertIn("Do not scaffold a CLI", spec)
+        self.assertIn("user confirmation does not override an explicit access restriction", spec)
+        self.assertIn("official API, permitted export, or manual-search workflow", spec)
+
 
 class TestSoftTwoHundred(unittest.TestCase):
     """A 200 whose body is not a robots.txt used to grant permission.

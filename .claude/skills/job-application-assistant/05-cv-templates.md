@@ -1,18 +1,23 @@
 ---
-framework_version: 1.4.3
+framework_version: 1.5.1
 ---
 
 # CV Templates and Tailoring Guide
 
-<!-- SETUP: Profile statements and section ordering are personalized by running /setup -->
+<!-- Candidate facts and reusable evidence live only in 01-candidate-profile.md. -->
 
-## Template: LaTeX moderncv (Banking Style)
+## Template: Stock One-Page Resume
 
-All CVs use the moderncv LaTeX package with the "banking" style and "blue" color scheme.
+Use the single-column LaTeX layout in `cv/main_example.tex`. Read identity, contact
+details, and factual evidence from `01-candidate-profile.md` at runtime; never store those
+candidate facts in this method file. Preserve the
+navy-and-blue visual hierarchy, compact Helvetica-style sans-serif typography, literal
+contact-detail treatment, section rules, and ATS-safe reading order.
 
 **Output file:** `cv/main_<company>_<role>.tex`
-**Compile with:** **lualatex** on MiKTeX/TeX Live. pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors; lualatex handles the same sources cleanly.
-**Master reference:** `cv/main_example.tex` (comprehensive CV with all competencies, experience, and achievements - use as source when building targeted CVs)
+**Compile with:** **lualatex** on MiKTeX/TeX Live.
+**Structural reference:** `cv/main_example.tex` (`01-candidate-profile.md` is the sole
+factual baseline)
 
 ### Compile command
 
@@ -20,73 +25,21 @@ All CVs use the moderncv LaTeX package with the "banking" style and "blue" color
 cd cv && lualatex -interaction=nonstopmode main_<company>_<role>.tex
 ```
 
-Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. Any page count other than 2 is a failure that must be fixed before presenting to the user.
+Expected output: `Output written on main_<company>_<role>.pdf (1 page, ...)`. Any page count other than 1 is a failure that must be fixed before presenting to the user.
 
 ## Document Structure
 
-```latex
-\documentclass[11pt,a4paper,sans]{moderncv}
-\moderncvstyle{banking}
-\moderncvcolor{blue}
+Do not rebuild the layout from a generic template. Copy
+`cv/main_example.tex`, then tailor only the summary, strength lines, and evidence bullets
+while preserving the preamble and these macros:
 
-% Force the name and section headings to render in moderncv blue (color1).
-% Default banking leaves them black: moderncvstylebanking.sty's \colorlet
-% copies (not aliases) the pre-scheme accent colour, so the name colours are
-% frozen before \moderncvcolor runs. Re-let them after. \namefont is the hook
-% every name-style macro routes through, so this also works on moderncv 2.3.1
-% (Debian/Ubuntu apt), which has no \firstnamestyle/\lastnamestyle at all.
-\renewcommand*{\namefont}{\fontsize{34}{36}\bfseries\upshape}
-\colorlet{firstnamecolor}{color1}
-\colorlet{lastnamecolor}{color1}
-\colorlet{namecolor}{color1}
-\renewcommand*{\sectionstyle}[1]{{\sectionfont\color{color1}#1}}
+- `\resumesection{...}` for uppercase section headings and horizontal rules
+- `\roleheader{title}{ASCII date range}{employer}{location}` for experience
+- `\projectheader{title}{scope label}` for projects
+- `\schoolheader{institution}{location}` for education
+- the compact `itemize` settings and single-column reading order
 
-\usepackage[utf8]{inputenc}
-% moderncv loads hyperref itself in an \AtEndPreamble hook, so \hypersetup
-% must go in an \AtEndPreamble of our own: on moderncv < 2.4 a top-level
-% \usepackage{hyperref} clashes with the class's own
-% \RequirePackage[unicode]{hyperref}. From 2.4.0 the class passes its options
-% through \PassOptionsToPackage instead, which is what removes that clash.
-\AtEndPreamble{\hypersetup{
-    colorlinks=true,
-    linkcolor=blue,
-    filecolor=magenta,
-    urlcolor=blue,
-    pdftitle={[YOUR_NAME] - CV},
-    % Keep pdfpagemode=UseNone: this block runs after moderncv's own
-    % \AtEndPreamble (moderncv.cls sets pdfpagemode there), so a FullScreen
-    % value here would win and open every CV in fullscreen presentation mode.
-    pdfpagemode=UseNone,
-}}
-\usepackage[scale=0.77]{geometry}
-\usepackage{import}
-
-% Personal data
-\name{[FIRST_NAME]}{[LAST_NAME]}
-% If you have no address to list, DELETE this whole line. \address{}{}{} fails
-% with "There's no line here to end" on every moderncv version.
-\address{[YOUR_ADDRESS]}{}{}
-\phone[mobile]{[YOUR_PHONE]}
-\email{[YOUR_EMAIL]}
-\extrainfo{\href{[YOUR_LINKEDIN_URL]}{LinkedIn}, \href{[YOUR_GITHUB_URL]}{GitHub}}
-
-\begin{document}
-\makecvtitle
-
-% 1. Profile statement (1-3 sentences, tailored per role)
-% 2. Skills section
-% 3. Education section
-% 4. Professional Experience section
-% 5. Selected Publications (if applicable)
-% 6. Honors and Awards (if applicable)
-% 7. References
-
-\end{document}
-```
-
-### Color overrides
-
-The `\renewcommand*` on `\namefont` and the three `\colorlet` lines in the preamble are required on lualatex+MiKTeX. Without them the name and section headings render in black even though `\moderncvcolor{blue}` is set, which looks inconsistent with the rest of the blue accent scheme (links, bullet markers, contact icons). The cause: `moderncvstylebanking.sty` defines the name colours with `\colorlet`, which *copies* the accent colour as it is before the scheme is applied, so the name colours are frozen to the pre-scheme value; re-assigning them with `\colorlet` after `\moderncvcolor{blue}` (as the preamble does) re-pins them to `color1`. `\namefont` is the shared hook every name-style macro routes through, so the block is version-agnostic - including moderncv 2.3.1 from Debian/Ubuntu apt, which has no `\firstnamestyle`/`\lastnamestyle` at all. Both names render bold; if you prefer regular weight, change `\bfseries` to `\mdseries` in the `\namefont` line (the weight now lives there, so it applies to the whole name). Don't drop the overrides - on most modern installs the defaults render visibly wrong.
+The font uses Latin Modern Sans because the visually similar TeX Gyre Heros build caused confirmed ATS extraction errors such as `ANAL YSIS`, `T ableau`, and `UA T`. Do not switch fonts without re-running the text-layer check.
 
 ### Spacing inside itemize lists (important)
 
@@ -111,37 +64,33 @@ The `\renewcommand*` on `\namefont` and the three `\colorlet` lines in the pream
 ```
 
 Two related patterns are fine and should be kept:
-- `\vspace{1pt}` immediately after `\section{...}` (between section heading and first item) - this is between the heading and the list, not between list items.
-- `\vspace{3pt}` between top-level `\cventry` blocks in Professional Experience or Education - this gives breathing room between roles and renders consistently.
+- spacing inside the `\resumesection` macro, which separates the heading rule from its content
+- small `\vspace` values between complete role or project blocks, after visual verification
 
 ### Section headings must match the CV's language (important)
 
-Section headings such as `\section{Core Competencies}`, `Professional Experience`, `Education`, `Languages`, `Publications`, `Honors and Awards`, `References` (and any others your template defines), plus the `Available upon request.` line under References, are all **literal English text baked into the template** - they do not translate themselves. Whenever the CV language (see `CV language` in the candidate profile) is not English, translate every one of these too, whatever they are, not just the body prose - a CV with a fully localized profile statement and bullets sitting under untouched English section headers reads as sloppy and inconsistent, and it's an easy thing to forget precisely because the prose translation is the obvious, visible part of the job. Worked example for Spanish: `Competencias Clave`, `Experiencia Profesional`, `Educaci\'on`, `Idiomas`, `Publicaciones`, `Distinciones y Premios`, `Referencias`, `Disponibles a solicitud.` The same rule applies for any other target language - check this explicitly during the verification pass.
+Section headings are literal text baked into the template. Read the current CV language
+from `01-candidate-profile.md` at runtime and keep headings/content consistent with it.
 
 ## Section-by-Section Tailoring
 
 ### Profile Statement / Elevator Pitch (Best Practice)
-This is the most important section to customize. It appears right after `\makecvtitle`.
+This is the most important section to customize. It appears immediately below the contact header.
 
-Write 5-7 lines that function as an "elevator pitch": a concise, compelling introduction explaining why you're qualified for *this specific role*. Focus on what the employer gains from hiring you.
+Write a compact 3-5 line paragraph that functions as an "elevator pitch": a concise introduction explaining why you're qualified for *this specific role*. Focus on what the employer gains from hiring you.
 
 When the role sits outside your home domain, **lead with the domain-transfer argument** - the one or two sentences connecting your background to their problem (e.g. wave physics to radar signal processing) belong in the profile statement's opening, not buried in the cover letter. It is the strongest card a domain-changer holds; play it first.
 
-**Create 2-3 profile statement templates for your main role types:**
-
-<!-- SETUP: These are populated based on your background -->
-**For [YOUR_PRIMARY_ROLE_TYPE] roles:**
-> [YOUR_PROFILE_STATEMENT_TEMPLATE_1]
-
-**For [YOUR_SECONDARY_ROLE_TYPE] roles:**
-> [YOUR_PROFILE_STATEMENT_TEMPLATE_2]
-
-Statements labeled *[Used for: <company>_<role>]* were extracted from archived application drafts by `/setup` Path A. They are **phrasing references, never fact sources**: when drafting from one, every factual claim still comes from `01-candidate-profile.md` - a past tailored draft does not vouch for its own accuracy.
+Build the statement at runtime from the task-relevant evidence in
+`01-candidate-profile.md`. Do not persist role-specific candidate statements here and do
+not use archived tailored drafts as evidence. A useful statement names the target function,
+the strongest demonstrated evidence, and the truthful adjacency or development area in
+3-5 lines.
 
 ### Core Competencies / Skills Section (Best Practice)
 Reorder and emphasize based on the role. Use bold category labels.
 
-List **5-7 key competencies** in bullet format, tailored to the specific job. For each competency, briefly explain how it adds value to the position.
+Use three compact labeled lines, normally `Data & Analysis`, `Process & Systems`, and `Communication & Coordination`. Reorder or rename them only when the posting's language truthfully supports the change.
 
 Use the posting's own core term in the matching bullet's bold label when it truthfully applies - ATS and skim-reading hiring managers match literally, and "MLOps" in a heading outperforms a paraphrase like "ML Deployment".
 
@@ -157,9 +106,8 @@ Use the posting's own core term in the matching bullet's bold label when it trut
 State completion inside the entry itself:
 
 ```latex
-\item{\cventry{2025--2026}{[Degree], [Field]}{[Institution]}{[Location]}{}{\vspace{1pt}
-In progress, expected [Month Year]. [Relevant topics]
-}}
+\schoolheader{[Institution]}{[Location]}
+{\bfseries [Degree], [Field]} | [Start] - Expected [Month Year]
 ```
 
 Any consistent form works: `In progress, expected <Month Year>.` / `Expected completion <Month Year>.` / a date field of `2025–present`.
@@ -170,7 +118,7 @@ Claiming a credential not yet held is a factual misstatement, and it is the kind
 
 ### Professional Experience
 - Rewrite bullet points to emphasize aspects most relevant to the target role
-- Use 4-6 bullets for most recent role, 3-4 for previous, 2-3 for older
+- Use 3-4 bullets for the most recent role and 1-2 for the previous role; every line must earn its space on the one-page resume
 - **Emphasize measurable results** where possible: "Reduced processing time by X%", "Model adopted by the team"
 
 #### Check tenure against visible output
@@ -207,9 +155,8 @@ Wherever the CV names a verifiable artifact - a public project, a hackathon entr
 - Keep format brief, one line each
 
 ### References
-- List 2-4 references with name, title, company, and contact
-- End with: "More references are available upon request."
-- **Do not attach reference letters** - employers typically contact references directly
+- Keep references off the one-page resume; the candidate can provide them upon request
+- Do not attach reference letters unless an employer explicitly requests them
 
 ### LaTeX Special Characters (important)
 
@@ -228,39 +175,33 @@ Postings and profile data arrive as plain text; the CV is LaTeX. Escape these wh
 Two failure modes deserve special care:
 
 - **`%` fails silently.** An unescaped `%` starts a LaTeX comment: the compile succeeds with zero errors, and everything after the `%` on that line vanishes from the PDF. `Cut inference latency by 40% and saved DKK 2M annually` renders as "Cut inference latency by 40" - the bullet keeps its impressive-looking fragment and loses the actual result. Quantified achievement bullets are exactly where the guidance steers you ("use numbers where possible"), so check every `%` in every bullet before compiling.
-- **`&` fails loudly** inside `\cventry` (alignment-tab errors, `Missing } inserted`). The compile loop catches it, but escape employer names up front rather than debugging the compile.
+- **`&` fails loudly** in normal LaTeX text (alignment-tab errors, `Missing } inserted`). The compile loop catches it, but escape employer names up front rather than debugging the compile.
 
 Related trap: a bullet whose text begins with a literal `[` must be braced - `\item {[text]}` - or LaTeX parses the bracketed text as `\item`'s optional label and renders it clipped off the left page edge with a clean compile. The example CV's placeholder bullets are braced for exactly this reason.
 
 ## Compile-and-Inspect Loop (MANDATORY)
 
+This file owns the active CV template's build and repair procedure. The shared final
+artifact checks live in `10-application-verification.md`; `/apply` decides when that
+common checklist runs. Do not duplicate the common checklist here.
+
 After writing the CV and before presenting to the user, always compile and visually inspect the PDF. Iterate until the layout is clean. Workflow:
 
 1. Run `lualatex -interaction=nonstopmode main_<company>_<role>.tex`
-2. Check the output page count: must be exactly 2
-3. Read the PDF via the Read tool and visually inspect both pages
-4. Check for **orphaned entries**: a `\cventry` title line must never sit alone at the bottom of page 1 with its bullets on page 2
+2. Check the output page count: must be exactly 1
+3. Render the PDF and visually inspect the full page
+4. Confirm no heading, date, bullet, link, or final training line is clipped, crowded, or stranded
 
 ### Fixing common page-break problems
 
-**Problem: entry title on page 1, bullets orphaned to page 2**
-Add `\needspace{5\baselineskip}` immediately before the problematic `\cventry`:
-```latex
-\needspace{5\baselineskip}
-\item{\cventry{YEAR--YEAR}{Role Title}{Organization}{Location}{}{...}}
-```
-Include `\usepackage{needspace}` in the preamble.
+**Problem: a trailing section spills to page 2**
+Cut or tighten the lowest-relevance content using the relevance-weighted rules below. Do not reduce the margins, font size, or line spacing below the verified values in `cv/main_example.tex`.
 
-**Caveat - use `\needspace` before entries, never before `\section` headings.** A section-level `\needspace` pushes the entire section (heading plus content) to the next page whenever the request does not fit, stranding empty space above and typically *adding* a page instead of saving one. Apply it only to the individual `\cventry` that actually orphans, and only after a compile shows the orphan.
+**Problem: the page feels too dense**
+Remove duplicated phrases before changing typography. The section order and white space should remain close to the master resume.
 
-**Problem: one trailing section spills to page 3 (e.g., References alone on page 3)**
-Add `\enlargethispage{2-3\baselineskip}` before a late section (e.g., before `\section{Honors and Awards}`) to stretch page 2 by a few lines. This is the standard LaTeX rescue for near-miss overflows.
-
-**Problem: 3 pages with significant content on page 3**
-Cut content — do not compress geometry or `\vspace`. See "Relevance-weighted cutting" below for the rule.
-
-**Problem: content finishes early on page 2 (feels thin)**
-Restore the highest-relevance item that was previously cut — a CV that ends mid-page 2 looks incomplete.
+**Problem: the page feels visibly sparse**
+Restore the highest-relevance grounded bullet that was previously cut; do not add generic filler.
 
 ## ATS Parseability
 
@@ -274,9 +215,9 @@ Extraction tries **pypdf** first (`pip install pypdf`, BSD license), then Popple
 
 What to check in the extraction:
 
-- **Contact details as literal text.** The stock template's fontawesome contact icons extract as glyph names (`MOBILE-ALT`, `Envelope`) - harmless noise, because the actual address and number are printed beside them. The failure mode is a contact detail carried *only* by an icon or a hyperlink (like the `LinkedIn` link text, whose URL is not in the text layer): invisible to an ATS. The email address must always appear as printed text.
-- **No garbled output.** `(cid:NNN)` markers or `�` characters mean a font is embedded without a Unicode mapping - an ATS sees the same garbage. This shows up with unusual fonts in custom templates, not with the stock moderncv setup under lualatex.
-- **Reading order.** The stock banking style is single-column, so extraction order matches visual order. Custom templates (via `/add-template`) with sidebars or multi-column layouts can interleave unrelated lines; if extraction order is scrambled, the user is trading ATS compatibility for looks and should be told.
+- **Contact details as literal text.** The email address and phone number must appear as printed text, not only as icons or hyperlink destinations.
+- **No garbled or split keywords.** `(cid:NNN)`, `�`, or false word breaks such as `ANAL YSIS`, `T ableau`, and `UA T` are failures. Preserve the master resume's verified font configuration unless a replacement passes the same extraction check.
+- **Reading order.** The stock resume is single-column, so extraction order should match visual order. Custom templates with sidebars or multi-column layouts can interleave unrelated lines; if extraction order is scrambled, the user is trading ATS compatibility for looks and should be told.
 - **Keyword coverage.** Match the posting's required/preferred terms against the extracted text, in the posting's language. Prefer the posting's exact term over a synonym when it is truthfully applicable - ATS matching is often literal. Never add a keyword the profile does not support.
 
 ### Date fields must be ASCII ranges (confirmed ATS import failure)
@@ -285,40 +226,39 @@ This one is worth knowing about because it fails **silently**. A CV that passes 
 
 Two independent causes, both easy to avoid:
 
-1. **`--` in a `\cventry` date renders as an en-dash (U+2013), not a hyphen.** LaTeX ligatures `--` (two ASCII hyphens, U+002D) into a single en-dash glyph, so `2016--2024` reaches the PDF text layer as `2016<U+2013>2024`. Many parsers split date ranges only on an ASCII hyphen and see no range at all. Write the date argument with a **single hyphen**:
+1. **`--` in a date renders as an en-dash (U+2013), not a hyphen.** LaTeX ligatures `--` (two ASCII hyphens, U+002D) into a single en-dash glyph, so `2016--2024` reaches the PDF text layer as `2016<U+2013>2024`. Many parsers split date ranges only on an ASCII hyphen and see no range at all. Write the date argument with a **single hyphen**:
 
    ```latex
-   \item{\cventry{2016-2024}{Role Title}{Organization}{Location}{}{...}}   % parses
-   \item{\cventry{2016--2024}{Role Title}{Organization}{Location}{}{...}}  % en-dash, may not
+   \roleheader{Role Title}{2016-2024}{Organization}{Location} % parses
+   \roleheader{Role Title}{2016--2024}{Organization}{Location} % en-dash, may not
    ```
 
    This applies to the **date argument only**. Keep `--` everywhere it is typographically correct in prose, for example a numeric range like `EUR 600k--1M`.
 
-2. **A bare single year gives the parser no end date.** A short contract, mandate or internship written as `\cventry{2016}` imports as a start date with nothing to close it. Use an explicit range, with months where the role ran under a year:
+2. **A bare single year gives the parser no end date.** A short contract, mandate or internship written only as `2016` imports as a start date with nothing to close it. Use an explicit range, with months where the role ran under a year:
 
    ```latex
-   \item{\cventry{Mar 2016 - Jul 2016}{Contract Role}{Client}{Location}{}{...}}
+   \roleheader{Contract Role}{Mar 2016 - Jul 2016}{Client}{Location}
    ```
 
    Where a genuine range exists, use it even when a single year would be factually accurate - a degree written `1995` is true but imports worse than `1992-1995`. Do not invent a start date you do not have; a lone graduation year is fine, just expect it to be typed in by hand.
 
 **Add this to the step 5d checks**: after extracting the text layer, confirm every experience entry shows a start *and* an end separated by an ASCII hyphen. Because the failure is silent and invisible in the PDF, the candidate otherwise discovers it only while filling in the application form.
 
-## Page Budget - Hard 2-Page Limit
+## Page Budget - Hard One-Page Limit
 
-The CV **must** fit on exactly 2 pages when compiled. Use these content limits as a guide:
+The CV **must** fit on exactly 1 page when compiled. Use these content limits as a guide:
 
 | Section | Max budget |
 |---------|-----------|
-| Profile statement | 3-4 lines |
-| Skills | 5 items, each 1-2 lines |
-| Most recent role | 4-5 bullets |
-| Previous role | 2-3 bullets |
-| Older roles | 2 bullets (1 line each) |
-| Education | 2-3 entries |
-| Publications | 2-3 entries |
-| Awards | 3 entries, single line each |
-| References | "Available upon request." (single line) |
+| Profile statement | 3-5 lines |
+| Skills | 3 compact labeled lines |
+| Most recent role | 3-4 bullets |
+| Previous role | 1-2 bullets |
+| Selected projects | 2-3 projects, 1-2 bullets each |
+| Education | 2 entries plus only relevant coursework |
+| Training | 1 compact line |
+| References | Omit; available upon request |
 
 **If in doubt, cut rather than squeeze.** Reducing `\vspace` or geometry scale to force-fit content makes the CV look cramped.
 
@@ -347,7 +287,7 @@ Cut the lowest-total-score line first, regardless of which section it sits in.
 
 - Do not mechanically cut from the bottom of a static section list without checking relevance. "Cut the oldest role first" is wrong if that role is literally about the skill the posting asks for.
 - Do not cut the one concrete example the cover letter leans on. Relevance is measured against the cover letter you wrote, not just the job posting — interviewers will have read both.
-- Do not cut to fit if the fit is borderline (2.02 pages). Prefer `\enlargethispage{2-3\baselineskip}` on a late section for near-misses; reserve content cuts for genuine overflow (content on page 3 that is more than a single trailing section).
+- For a near-miss overflow onto page 2, remove duplication or tighten the lowest-relevance line. Do not shrink below the master resume's verified typography and margins.
 
 ## Recommended Section Order
 

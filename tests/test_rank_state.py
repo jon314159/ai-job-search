@@ -74,7 +74,10 @@ class Candidates(RankStateCase):
         self.assertEqual([row["key"] for row in out["selected"]], ["a"])
         self.assertEqual(
             set(out["selected"][0]),
-            {"key", "title", "company", "url", "portal", "deadline", "posted_date"},
+            {
+                "key", "title", "company", "url", "portal", "deadline", "posted_date",
+                "authoritative_url", "posting_snapshot", "snapshot_fetched_at", "snapshot_sha256",
+            },
             "the projection is the point: strengths/gaps and every other stored field "
             "stay on disk rather than entering the conversation",
         )
@@ -127,6 +130,51 @@ class Candidates(RankStateCase):
         )
         out = self.run_tool("candidates", "--all", "--tracker", str(self.tmp / "n.csv"))
         self.assertEqual(sorted(row["key"] for row in out["selected"]), ["a", "b", "d"])
+
+    def test_unverified_is_retryable_by_default(self):
+        self.write_state({"a": entry(status="unverified"), "b": entry(status="ranked")})
+        out = self.run_tool("candidates", "--tracker", str(self.tmp / "n.csv"))
+        self.assertEqual([row["key"] for row in out["selected"]], ["a"])
+
+    def test_explicit_dismissal_requires_both_all_flags(self):
+        self.write_state({"a": entry(status="skipped", skip_reason="user_not_interested")})
+        out = self.run_tool("candidates", "--all", "--tracker", str(self.tmp / "n.csv"))
+        self.assertEqual(out["selected"], [])
+        out = self.run_tool(
+            "candidates", "--all", "--include-dismissed", "--tracker", str(self.tmp / "n.csv")
+        )
+        self.assertEqual([row["key"] for row in out["selected"]], ["a"])
+
+    def test_include_dismissed_without_all_is_rejected(self):
+        self.write_state({"a": entry()})
+        proc = subprocess.run(
+            [sys.executable, str(TOOL), "candidates", "--include-dismissed",
+             "--state", str(self.state), "--today", TODAY],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("requires --all", proc.stderr + proc.stdout)
+
+    def test_exact_keys_require_new_status_and_snapshot_metadata(self):
+        snapshot = {
+            "posting_snapshot": "job_scraper/postings/a.md",
+            "snapshot_fetched_at": "2026-09-03T10:00:00Z",
+            "snapshot_sha256": "abc123",
+        }
+        self.write_state(
+            {
+                "ready": entry(**snapshot),
+                "old": entry(status="ranked", **snapshot),
+                "missing": entry(),
+            }
+        )
+        out = self.run_tool(
+            "candidates", "--keys", "ready,old,missing,ghost", "--tracker", str(self.tmp / "n.csv")
+        )
+        self.assertEqual([row["key"] for row in out["selected"]], ["ready"])
+        self.assertEqual(out["rejected_requested"], 2)
+        self.assertEqual(out["missing_requested"], ["ghost"])
 
     def test_missing_state_file_exits_nonzero(self):
         proc = subprocess.run(
@@ -235,6 +283,107 @@ class Apply(RankStateCase):
         self.assertEqual(stored["gaps"], ["g1"])
         self.assertEqual(stored["deadline"], "2026-09-05")
         self.assertTrue(out["ranked"][0]["urgent"], "a deadline inside 7 days carries the urgency marker")
+
+    def test_decision_evidence_and_snapshot_metadata_are_persisted(self):
+        self.write_state({"a": entry()})
+        result = {
+            "key": "a",
+            "status": "scored",
+            "scores": {"technical": 80, "experience": 75, "behavioral": 70, "career": 85},
+            "score_evidence": {"technical": "SQL", "experience": "reporting"},
+            "eligibility_gate": "FLAG",
+            "eligibility_note": "verify work authorization",
+            "target_scope_gate": "PASS",
+            "location_verdict": "PASS",
+            "geographic_priority": "PREFERRED_REMOTE",
+            "geographic_priority_note": "remote in candidate state",
+            "language_gate": "PASS",
+            "evidence_confidence": "HIGH",
+            "source_confidence": "EMPLOYER",
+            "requisition_id": "REQ-42",
+            "posted_date": "2026-09-01",
+            "compensation": "$60,000-$70,000",
+            "work_arrangement": "remote",
+            "employment_type": "full-time",
+            "deadline": "2026-10-01",
+            "selection_priority": 1,
+            "posting_snapshot": "job_scraper/postings/a.md",
+            "snapshot_fetched_at": "2026-09-03T10:00:00Z",
+            "snapshot_sha256": "abc123",
+            "authoritative_url": "https://example.com/careers/req-42",
+            "strengths": ["SQL evidence"],
+            "gaps": ["authorization needs confirmation"],
+        }
+        self.run_tool("apply", "--results", self.results([result]))
+        stored = self.read_state()["a"]
+        for field in (
+            "score_evidence", "eligibility_gate", "eligibility_note", "target_scope_gate",
+            "location_verdict", "geographic_priority", "geographic_priority_note",
+            "language_gate", "evidence_confidence", "source_confidence", "requisition_id",
+            "posted_date", "compensation", "work_arrangement", "employment_type", "deadline",
+            "selection_priority", "posting_snapshot", "snapshot_fetched_at", "snapshot_sha256",
+            "authoritative_url", "strengths", "gaps",
+        ):
+            self.assertEqual(stored[field], result[field], field)
+
+    def test_eligibility_and_target_scope_failures_veto_high_scores(self):
+        self.write_state({"a": entry(), "b": entry()})
+        scores = {"technical": 95, "experience": 95, "behavioral": 95, "career": 95}
+        out = self.run_tool(
+            "apply",
+            "--results",
+            self.results(
+                [
+                    {"key": "a", "status": "scored", "scores": scores, "eligibility_gate": "FAIL"},
+                    {"key": "b", "status": "scored", "scores": scores, "target_scope_gate": "FAIL"},
+                ]
+            ),
+        )
+        self.assertEqual(sorted(row["key"] for row in out["vetoed"]), ["a", "b"])
+        self.assertEqual(out["ranked"], [])
+
+    def test_unverified_retry_preserves_existing_rich_metadata(self):
+        original = entry(
+            status="ranked",
+            rank_score=82,
+            deadline="2026-10-01",
+            posting_snapshot="job_scraper/postings/a.md",
+            snapshot_sha256="abc123",
+            strengths=["existing evidence"],
+        )
+        self.write_state({"a": original})
+        out = self.run_tool(
+            "apply",
+            "--results",
+            self.results([{"key": "a", "status": "unverified", "retry_note": "rate limited"}]),
+        )
+        stored = self.read_state()["a"]
+        self.assertEqual(stored["status"], "unverified")
+        self.assertEqual(stored["retry_note"], "rate limited")
+        for field in ("rank_score", "deadline", "posting_snapshot", "snapshot_sha256", "strengths"):
+            self.assertEqual(stored[field], original[field], field)
+        self.assertEqual(out["unverified"][0]["retry_note"], "rate limited")
+
+    def test_one_bad_result_prevents_every_write_in_the_batch(self):
+        self.write_state({"a": entry(), "b": entry()})
+        before = self.read_state()
+        out = self.run_tool(
+            "apply",
+            "--results",
+            self.results(
+                [
+                    {
+                        "key": "a",
+                        "status": "scored",
+                        "scores": {"technical": 80, "experience": 80, "behavioral": 80, "career": 80},
+                    },
+                    {"key": "b", "status": "scored", "scores": {"technical": 80}},
+                ]
+            ),
+            expect=1,
+        )
+        self.assertFalse(out["written"])
+        self.assertEqual(self.read_state(), before)
 
     def test_expired_status_is_written_through(self):
         self.write_state({"a": entry()})

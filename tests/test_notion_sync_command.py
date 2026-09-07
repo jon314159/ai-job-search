@@ -51,6 +51,14 @@ class NotionSyncCommandSpec(unittest.TestCase):
             "spec lost the rule that CV/cover-letter content never syncs to Notion",
         )
 
+    def test_first_external_write_has_a_precise_boundary(self):
+        text = COMMAND.read_text(encoding="utf-8")
+        self.assertIn("one-way presentation view", text)
+        self.assertIn("ask the user for the exact parent location", text)
+        self.assertIn("create or update only the confirmed database/pages", text)
+        self.assertIn("Never delete or archive pages", text)
+        self.assertIn("deletes or shares pages", text)
+
     @unittest.skipUnless(
         _HAVE_YAML,
         "PyYAML not installed (the CI Python-test job omits it; the lint job runs lint_skills.py directly)",

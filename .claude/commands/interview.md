@@ -21,9 +21,13 @@ v1 preps for a **specific application**. Generic no-target practice is out of sc
 
 ## Step 1: Load the Application Context
 
-1. **The archive** (started by `/apply`, maintained by `/outcome`): derive `<company>_<role>` by the **Subfolder naming** rule in `documents/README.md`, then use `documents/applications/<company>_<role>/`.
+1. **The archive** (started by `/apply`, maintained by `/outcome`): use the matched
+   tracker row's `application_id` and exact `archive_path`; never derive a shared
+   company+role folder.
    - `job_posting.md` - the exact posting the user applied to
-   - `cv_draft.tex` and `cover_letter.tex` - what was actually submitted. **These are what the interviewer read**; every talking point must be consistent with their claims.
+   - `application_manifest.json` - identifies the exact resume, optional cover, and form
+     artifacts actually submitted, preserving their extensions. **These are what the
+     interviewer read**; prepared-but-unsubmitted files are excluded.
    - `outcome.md` - the stage reached so far and any recorded feedback from earlier stages. Feedback from stage N is the highest-value input for stage N+1 prep.
 2. **Fallbacks** (the application may predate `/outcome`): posting via WebFetch on the tracker row's `source` URL, or ask the user to paste it; CV via `cv/main_<company>*.tex` and cover letter via `cover_letters/cover_<company>_*.tex`. State plainly which context is missing rather than guessing - and suggest `/outcome <company>` to build the archive for next time.
 3. **Ask the user what this interview is** (skip anything `outcome.md` already records): stage (phone screen / technical / case / final round), date, format (phone, video, onsite), and who is interviewing (names and titles, if known).
@@ -62,9 +66,10 @@ Derive from four sources, in priority order:
 4. **The stage type** - phone screens get motivation and timeline questions; technical rounds get the posting's stack; final rounds get values, salary, and "any reservations" questions
 
 ### 2. STAR answer mapping
-Match the ready-made STAR examples in `07-interview-prep.md` to the likely questions using their "Use for" tags. Then:
-- For likely questions **no existing STAR example covers**, draft a new STAR answer grounded strictly in facts from `01-candidate-profile.md` - profile facts arranged into S/T/A/R, not embellished. Include these drafts in the prep pack; offer to append them to `07-interview-prep.md` only if the user explicitly approves.
-- If `/setup` left incomplete STAR stubs relevant to this role, surface them: the user should fill in the details before the interview.
+Build the role-specific STAR evidence set using `07-interview-prep.md`'s method and the
+facts in `01-candidate-profile.md`. For a missing factual component, ask the user rather
+than infer it. Confirmed new facts are written to 01; never persist candidate stories in
+the method file.
 
 ### 3. Consistency brief
 A short list of the specific claims the submitted CV and cover letter make (achievements, numbers, skills emphasized) that the interviewer is most likely to probe. The rule stated plainly: **no claim in the room that isn't on the paper, and every claim on the paper must be defensible in depth.**
@@ -76,9 +81,31 @@ The relevant entries from `07`'s tough-question list with per-application answer
 Pick 4-6 from `07`'s categories, customized to the research and the stage: role and team questions at screens, tech and growth questions at technical rounds, culture and leadership questions by the final round (that is the last chance to detect a deal-breaker). Cut any question the research already answers publicly - asking it signals you didn't look.
 
 ### 6. Logistics
-The phone/video tips from `07` when the format calls for them, plus date and interviewer names as a header.
+The phone/video tips from `07` when the format calls for them, plus date and interviewer names as a header. Record that the finalized pack will be written to the exact tracker `archive_path` loaded in Step 1; the required review below still happens before that write.
 
-Save the pack in the archive folder derived in Step 1 as `interview_prep_<stage>.md` (create the folder if this application predates `/outcome`). The folder is gitignored, so the pack stays personal; one file per stage, so earlier packs remain as history. Present the pack in chat as well - the file is the artifact, the conversation is the delivery.
+Keep the draft prep pack in working memory through the required review below. Do not save
+or present it yet.
+
+### Required Codex review checkpoint
+
+After drafting the prep pack, before saving or presenting it, and before Step 4 offers
+a mock interview, the execution owner completes the required content checkpoint in
+[job-search model routing](../../.agents/skills/luna-sol-routing/references/job-search-workflow.md).
+That reference selects self-review or independent review and the appropriate model/effort.
+Check all material claims, requirement coverage, consistency, and factual support.
+If delegating, send one `artifact_review_v1` packet below 3K tokens with every decisive
+requirement excerpt, evidence ID, and only the needed prep-pack excerpts. Do not send
+the full posting, profile, repository, chat, or inbox. The reviewer uses only supplied
+evidence and returns a verdict plus grounded edits; no tools or additional research.
+
+Record `review_mode: INDEPENDENT | SELF_REVIEW`, `review_model`, and `review_effort`
+accurately, including any fallback to self-review. Do not claim independence for an
+owner's own review or use a model label to imply it. The owner applies supported
+corrections and completes factual verification; reconsult only for a material gap or
+new evidence. Preserve all existing gates. Then save the finalized pack in the exact tracker `archive_path`
+loaded in Step 1 as `interview_prep_<stage>.md`. The folder is gitignored, so the pack
+stays personal; one file per stage preserves history. Present only the finalized pack in
+chat.
 
 ---
 
@@ -96,7 +123,8 @@ End with:
 
 > Good luck. After the interview, run `/outcome <company>` to log the stage and any feedback - it sharpens the prep for the next round, and once the process resolves it feeds your fit-framework calibration via `/setup`.
 
-If Step 3 drafted new STAR answers the user approved for keeps, remind them those were appended to `07-interview-prep.md` (or offer again if they deferred).
+If Step 3 surfaced confirmed new facts, report that they were written to the canonical
+profile; the role-specific answer remains in this application prep pack.
 
 ---
 
@@ -106,6 +134,7 @@ If Step 3 drafted new STAR answers the user approved for keeps, remind them thos
 2. **Honesty on gaps.** Weak matches get bridge answers (acknowledge → adjacent experience → learning path), never invented experience. Same rule as everywhere else in this repo.
 3. **Verified research only.** Company specifics go in the pack only after independent confirmation. Interviewer notes stick to public professional information.
 4. **Stage-appropriate prep.** A phone screen pack and a final-round pack are different documents; recorded feedback from earlier stages takes priority over generic question lists.
-5. **Write only to the application archive** — with one exception. The prep pack lands in the archive folder derived in Step 1; framework files are not edited, except appending user-approved STAR examples to `07-interview-prep.md` on explicit request.
+5. **Write the prep pack only to the matched `archive_path`.** Framework/template files
+   are never personalized.
 
    **The exception is `01-candidate-profile.md`.** Interview prep is where new facts surface most often: the user recalls a metric, corrects a scope, or fills in a STAR stub. When that happens, write the fact into the profile, as well as putting it in the prep pack. A fact recorded only in prep material reads as unsupported to a later drafting session and gets stripped from CVs as a fabrication. Prep files are not a substitute for the profile.

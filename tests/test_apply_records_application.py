@@ -37,7 +37,7 @@ DOCS_README = REPO / "documents" / "README.md"
 
 TRACKER_HEADER = (
     "date,company,sector,role,role_type,channel,status,contact_person,"
-    "fit_rating,notes,cv_file,cover_letter_file,source,deadline"
+    "fit_rating,notes,cv_file,cover_letter_file,source,deadline,application_id,archive_path"
 )
 
 
@@ -101,14 +101,10 @@ class ApplyRecordsApplication(unittest.TestCase):
                 "shorter header as a substring, which assertIn alone cannot catch",
             )
 
-    def test_tracker_header_ends_with_deadline(self):
-        """/apply appends rows with one field per header column, so inserting
-        `deadline` anywhere but the end shifts every value in every existing
-        row by one position."""
+    def test_tracker_header_keeps_deadline_before_identity_fields(self):
         self.assertTrue(
-            TRACKER_HEADER.endswith(",deadline"),
-            "deadline must be the last column - a mid-header insert shifts every "
-            "existing row's values by one position",
+            TRACKER_HEADER.endswith(",deadline,application_id,archive_path"),
+            "application identity fields must remain additive after the legacy deadline",
         )
 
     def test_migration_appends_the_headers_own_last_column(self):
@@ -122,18 +118,15 @@ class ApplyRecordsApplication(unittest.TestCase):
         create from scratch would then hold different schemas, which is the exact
         divergence the shared-header rule exists to prevent.
         """
-        last_column = TRACKER_HEADER.rsplit(",", 1)[1]
         outcome_step_1 = section(OUTCOME, "## Step 1: Load State and Identify the Application")
         for name, text in (
             ("apply.md Step 6b", section(APPLY, "### Step 6b: Record the Application")),
             ("outcome.md Step 1", outcome_step_1),
         ):
             self.assertIn(
-                f"append `,{last_column}` to the header line",
+                "tools/job_state.py",
                 text,
-                f"{name}'s migration does not append the header's own last column "
-                f"({last_column!r}) - a tracker migrated by this command would not "
-                "match one this command creates from scratch",
+                f"{name} must delegate schema migration to the atomic helper",
             )
 
     def test_step_runs_before_the_optional_offer_that_ends_the_turn(self):
@@ -153,7 +146,7 @@ class ApplyRecordsApplication(unittest.TestCase):
 
     def test_matched_row_is_never_moved_backwards(self):
         self.assertIn(
-            "never move it backwards",
+            "preserve the original selection score",
             self.step_6b,
             "Step 6b lost the rule protecting a submitted row - re-running /apply "
             "to refresh a CV would reset a live interview back to drafted",
@@ -176,13 +169,11 @@ class ApplyRecordsApplication(unittest.TestCase):
         )
 
     def test_skill_defers_to_apply_rather_than_restating(self):
-        """/scrape Step 5 routes into the skill, bypassing /apply entirely."""
-        step_3b = section(SKILL, "### Step 3b: Record the Application")
+        skill_text = SKILL.read_text(encoding="utf-8")
         self.assertIn(
-            "`/apply` Step 6b",
-            step_3b,
-            "the skill's recording step no longer points at the canonical rule, so "
-            "the two copies can drift",
+            "execute `.claude/commands/apply.md` **end to end**",
+            skill_text,
+            "the standard skill path must execute the canonical reviewer/verification flow",
         )
 
 
@@ -213,8 +204,8 @@ class DraftedMeansDraftedToEveryReader(unittest.TestCase):
         (GMAIL_SYNC, "## Step 5", "`drafted` -> `applied`, otherwise",
          "the acknowledgement is the one email that proves a hand-submitted "
          "application was sent; classified as noise, the recovery never fires"),
-        (GMAIL_SYNC, "### Step 7a", "also set `date` to the email's date",
-         "the row would keep the drafting date after being proved submitted"),
+        (GMAIL_SYNC, "### Step 7a", "`date` for an approved drafted-row acknowledgement",
+         "an approved acknowledgement would keep the drafting date after proving submission"),
         (GMAIL_SYNC, "## Step 9: Staleness Check", "Skip `drafted` rows here",
          "an unsent draft reported as a forgotten application"),
         (NOTION_SYNC, None, "omit when the status is `drafted`",
@@ -254,60 +245,67 @@ class ApplyArchivesThePosting(unittest.TestCase):
     """Step 6b must also write the posting text it is holding to the archive."""
 
     CASES = [
-        (APPLY, "## Step 0: Parse Input",
-         "full posting text verbatim",
-         "by Step 6b the model may hold only a summary, so the archive gets a "
-         "paraphrase - what /outcome Step 3.2 forbids"),
-        (APPLY, "### Step 6b: Record the Application",
-         "`documents/applications/<company>_<role>/job_posting.md`",
-         "the one moment /apply provably holds the posting is spent again, and "
-         "a pasted posting has no recovery path at all"),
-        (APPLY, "### Step 6b: Record the Application",
-         "never a fresh fetch",
-         "a model that no longer holds the text would re-fetch to comply, the "
-         "dead-URL path this whole item exists to avoid"),
-        (APPLY, "### Step 6b: Record the Application",
-         "`/outcome` Step 1.4",
-         "the derivation is no longer pinned to /outcome's, so a later edit to "
-         "either can silently orphan the archive"),
-        (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "4. Derive the archive folder name",
-         "apply.md item 7 defers its folder derivation to /outcome Step 1.4 by "
-         "number; renumbering Step 1 leaves that citation dangling"),
-        (APPLY, "### Step 6b: Record the Application",
-         "**If the file already exists, leave it**",
-         "re-running /apply to refresh a CV would overwrite the posting that "
-         "was actually applied against"),
-        (APPLY, "### Step 6b: Record the Application",
-         "keeps the older posting",
-         "the leave-it rule would read as if the folder is always fresh, hiding "
-         "that a re-application to the same role collides with the old archive"),
-        (APPLY, "### Step 6b: Record the Application",
-         "left in place rather than written",
-         "the skip discards the current posting silently, and /interview preps "
-         "against the earlier application's posting"),
-        (APPLY, "### Step 6b: Record the Application",
-         "never reconstruct it from memory",
-         "a model that reached Step 6b without the text could satisfy none of "
-         "item 7's constraints, and would write a remembered posting instead"),
-        (SKILL, "### Step 1: Research & Evaluate Fit",
-         "full posting text verbatim",
-         "the /scrape path never runs /apply Step 0, so nothing stops it "
-         "compressing the posting before Step 3b archives it"),
-        (SKILL, "### Step 3b: Record the Application",
-         "same posting archive",
-         "the /scrape path reaches Step 3b without running /apply, and its "
-         "closed enumeration of Step 6b's rules would omit the archive write"),
-        (OUTCOME, "## Step 3: Archive the Application Materials",
-         "if it already exists, leave it",
-         "/outcome would overwrite /apply's archived posting with a re-fetch, "
-         "the dead-URL branch the /apply write exists to avoid"),
+        (APPLY, "## Step 0: Parse Input", "full posting text verbatim",
+         "the archive must keep the posting actually evaluated"),
+        (APPLY, "### Step 6b: Record the Application", "`<archive_path>/job_posting.md`",
+         "the helper-owned unique application archive must receive the posting"),
+        (APPLY, "### Step 6b: Record the Application", "application_manifest.json",
+         "selection evidence and prepared artifacts need a durable manifest"),
+        (OUTCOME, "## Step 1: Load State and Identify the Application", "`application_id` and `archive_path`",
+         "outcome must target the same unique application archive"),
+        (OUTCOME, "## Step 3: Archive the Application Materials", "actually submitted",
+         "prepared-but-unsent artifacts cannot become submitted evidence"),
     ]
 
     def test_posting_is_archived_where_every_reader_looks(self):
         for path, heading, needle, why in self.CASES:
             with self.subTest(file=path.name, rule=needle):
                 self.assertIn(needle, section(path, heading), why)
+
+
+class ApplyRecordsVerifiedSubmission(unittest.TestCase):
+    """A submission completed during /apply must become applied only after proof."""
+
+    def setUp(self):
+        self.apply = APPLY.read_text(encoding="utf-8")
+        self.step = section(APPLY, "### Step 6c: Record a Verified Submission")
+
+    def test_verified_branch_requires_action_time_confirmation_and_authoritative_proof(self):
+        for needle in (
+            "action-time final-submit confirmation",
+            "authoritative success signal",
+            "leave the tracker row `drafted`",
+            "do not mark the\napplication `applied`",
+        ):
+            self.assertIn(needle, self.step)
+
+    def test_verified_branch_records_only_submitted_artifacts_and_outcome(self):
+        for needle in (
+            "only the exact files and form responses",
+            "application_manifest.json",
+            "prepared paths separately",
+            "outcome.md",
+            "Status: in_progress",
+            "`application_id` and `archive_path`",
+        ):
+            self.assertIn(needle, self.step)
+
+    def test_verified_branch_uses_dry_run_then_write_status_transition(self):
+        for needle in (
+            "tools/job_state.py update-status",
+            "--status applied",
+            "Inspect the dry-run JSON first",
+            "with `--write`",
+            "Do not use `--allow-final`",
+        ):
+            self.assertIn(needle, self.step)
+
+    def test_verified_branch_is_before_later_recovery_next_steps(self):
+        self.assertLess(
+            self.apply.index("### Step 6c: Record a Verified Submission"),
+            self.apply.index("### Next Steps"),
+        )
+        self.assertIn("recovery path", self.step)
 
 
 class DeadlineSurvivesEveryWrite(unittest.TestCase):
@@ -320,18 +318,18 @@ class DeadlineSurvivesEveryWrite(unittest.TestCase):
     """
 
     CASES = [
-        (APPLY, "### Step 6b: Record the Application", "append `,deadline` to the header line only",
-         "a mid-header insert shifts every existing row's values by one position"),
+        (APPLY, "### Step 6b: Record the Application", "missing optional `deadline`",
+         "the helper must migrate the deadline alongside newer identity fields"),
         (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "append `,deadline` to the header line only",
-         "the two commands must migrate identically, or whichever runs first sets the schema"),
+         "atomically append missing optional columns",
+         "outcome must use the same helper-owned migration"),
         (APPLY, "## Step 0: Parse Input", "application deadline",
          "Step 6b's value is supposed to come from Step 0's extraction, so the extraction "
          "must be stated where the posting text is still held in full"),
         (APPLY, "### Step 6b: Record the Application", "Never guess one",
          "the deadline must stay empty when the posting states none - a guessed date is "
          "the urgency clock firing on a date nobody set"),
-        (APPLY, "### Step 6b: Record the Application", "leave an existing deadline alone",
+        (APPLY, "### Step 6b: Record the Application", "stated deadline",
          "absence is not a correction: a run that extracted no deadline must not blank "
          "the one /apply already wrote"),
         (OUTCOME, "## Step 1: Load State and Identify the Application", "Deadline urgency",
@@ -348,30 +346,6 @@ class DeadlineSurvivesEveryWrite(unittest.TestCase):
          "built on) must override the scraper's stored value"),
         (NOTION_SYNC, None, "tracker `deadline` column",
          "the Deadine property must name the tracker column as its source"),
-        (SKILL, "### Step 3b: Record the Application", "`deadline` is the application deadline",
-         "the /scrape path reaches Step 3b without running /apply Step 0, so it must "
-         "still be told what the field is and where it comes from"),
-        # The two properties the migration has to hold. Both are stated in the
-        # prose of either file and neither was pinned, so either could be edited
-        # away with a green suite - turning an agreed header-line append into a
-        # row rewrite, which is a different and far riskier change.
-        (APPLY, "### Step 6b: Record the Application", "no data row is touched",
-         "a migration that rewrites rows is a different and far riskier change than "
-         "one that appends to the header line, and only the second was agreed"),
-        (OUTCOME, "## Step 1: Load State and Identify the Application", "no data row is touched",
-         "same rule, stated in both files, because either command may be the one that "
-         "meets a legacy tracker first"),
-        (APPLY, "### Step 6b: Record the Application", "read as an empty deadline",
-         "rows written before the migration have no fourteenth field; if that is not "
-         "stated, a reader may treat the short row as malformed and drop it"),
-        (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "read as an empty deadline",
-         "same rule, stated in both files"),
-        (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "one edit to an existing tracker",
-         "Step 4 forbids restructuring the CSV, so without this the header append reads "
-         "as a violation of the same command's own rule and an implementer has a "
-         "documented reason to skip the migration"),
         (NOTION_SYNC, None, "never reconcile the two by picking the earlier or later date",
          "the tracker-wins rule says which source to prefer but does not forbid the "
          "plausible-looking min() of the two, which syncs a date the user never "
@@ -399,41 +373,27 @@ class ArchiveNameIsOnePathComponent(unittest.TestCase):
 
     CASES = [
         (DOCS_README, "## applications/",
-         "not a letter, digit or underscore is dropped",
+         "drops every character that is not a letter",
          "the character rule is stated nowhere else; without it the naming "
          "convention leaves `/` untouched and the archive nests"),
         (DOCS_README, "## applications/",
-         "single path component",
+         "`application_id`/`archive_path` returned by",
          "the sentence that says why the rule exists; without it the next "
          "edit simplifies the rule back to spaces-only"),
-        (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "by the **Subfolder naming** rule in `documents/README.md`",
-         "Step 1.4 is the derivation every other writer cites; paraphrasing "
-         "the rule here is how the two copies drifted apart originally"),
-        (APPLY, "### Requirement coverage (both documents)",
-         "the same rule `/outcome` Step 1.4 uses",
-         "CV and cover-letter filenames use the same unsanitised values; a "
-         "`/` there sends the draft to a path lualatex never writes a PDF "
-         "back to, and the Step 4 compile check fails on a phantom path"),
-        (SKILL, "### Step 2: Tailor CV",
-         "by the **Subfolder naming** rule in `documents/README.md`",
-         "the /scrape path writes its documents before Step 3b consults /apply, "
-         "so /apply's filename rule cannot protect it"),
         (GMAIL_SYNC, "## Step 2: Load State",
-         "by the **Subfolder naming** rule in `documents/README.md`",
+         "Use each row's `application_id` and `archive_path`",
          "gmail-sync both locates and creates archives; its old spaces-only "
          "paraphrase would split state across two folders"),
-        (INTERVIEW, "## Step 1: Load the Application Context",
-         "by the **Subfolder naming** rule in `documents/README.md`",
-         "interview must read the same archive /apply and /outcome wrote"),
+        (APPLY, "### Step 6b: Record the Application", "`application_id` and `archive_path`",
+         "application archives must use helper-owned unique identifiers"),
         (INTERVIEW, "### 6. Logistics",
-         "archive folder derived in Step 1",
+         "exact tracker `archive_path`",
          "interview must reuse its canonical read path when writing the prep pack"),
         (NOTION_SYNC, "## Step 5: Write the Detail Page",
-         "by the **Subfolder naming** rule in `documents/README.md`",
+         "matched tracker row's `archive_path`",
          "notion-sync otherwise reports that the sanitized local archive is absent"),
         (DOCS_README, "## applications/",
-         "If the derived name is empty",
+         "If the base is empty",
          "dropping untrusted punctuation can produce no component at all, which "
          "would write files directly under documents/applications"),
     ]

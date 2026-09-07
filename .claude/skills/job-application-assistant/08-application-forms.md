@@ -1,10 +1,14 @@
 ---
-framework_version: 1.0.0
+framework_version: 1.0.3
 ---
 
 # Application Form Fields
 
-`/apply` produces two artifacts: a CV and a cover letter. Many applications need a **third** — free-text fields typed directly into an application portal. Graduate programs, large-employer ATS systems and startup forms routinely ask for things neither document covers, under a character or word limit, in a box with no formatting.
+`/apply` always produces a CV and creates a cover letter only when required or requested.
+Some applications also need free-text fields typed directly into a portal. Graduate
+programs, large-employer ATS systems and startup forms routinely ask for content the
+submitted documents do not cover, under a character or word limit, in a box with no
+formatting.
 
 This file governs that third artifact. It is not a document you compile; it is text the candidate pastes.
 
@@ -20,7 +24,10 @@ Trigger it whenever a posting or portal asks for any of:
 
 ## The rule that governs everything here
 
-**Every claim in a form field must already be defensible from the same sources the CV and cover letter are grounded against** — the union of `01-candidate-profile.md`, the master CV (`cv/main_example.tex`), and `CLAUDE.md`'s Candidate Profile section, with a claim grounded if ANY of the three supports it. The interviewer reads the form alongside the CV. A form field is not a place to introduce new claims, inflate scope, or fill space — it is a place to *select* from what is already true and arrange it for the question asked.
+**Every claim in a form field must be defensible from the same canonical source as the
+CV and cover letter: `01-candidate-profile.md`.** The interviewer reads the form alongside
+the CV. A form field is not a place to introduce new claims, inflate scope, or fill space;
+it selects from what is already true and arranges it for the question asked.
 
 All accuracy rules from `05-cv-templates.md` and `03-writing-style.md` apply unchanged.
 
@@ -68,7 +75,10 @@ Prefer the version that **maps the candidate's problem onto the employer's probl
 
 ## Output format
 
-Save to a plain `.txt` file the candidate can copy from, alongside their other application material for that employer. One file per employer, containing every field that employer asked for.
+For an explicit `/apply` form-materials request, save one plain `.txt` file alongside
+the other local application material for that employer, containing every requested field.
+For a single-question or conversational request, present the verified answer first and
+save it only when the user asks for a durable form pack.
 
 Include:
 - A header naming the employer and the roles it covers
@@ -79,7 +89,7 @@ Include:
 
 ## Verification before handing it over
 
-- [ ] Every factual claim traces to the union of `01-candidate-profile.md`, the master CV (`cv/main_example.tex`), and `CLAUDE.md`'s Candidate Profile section
+- [ ] Every factual claim traces to `01-candidate-profile.md`
 - [ ] No claim contradicts the CV or cover letter submitted for the same role
 - [ ] Ownership scoped correctly on contributory work
 - [ ] Word and character counts measured, not estimated

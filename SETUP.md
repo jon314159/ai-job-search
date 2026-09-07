@@ -16,13 +16,19 @@ You'll need an Anthropic API key or a Claude Pro/Team subscription. See the [Cla
 
 ### Python
 
-Python 3.10+ is required for the salary lookup tool. Check with:
+Python 3.10+ is required for the core local state/snapshot helper and PDF verification;
+the salary lookup is optional. Check the available launchers in this order:
 
 ```bash
+python --version
+py -3 --version
 python3 --version
 ```
 
-On Windows, `py --version` is often the most reliable check. If your system exposes Python as `python` instead of `python3`, use `python` in the commands below.
+Use the first command that succeeds as `<PYTHON>` throughout the workflow. A project-local
+`.venv/Scripts/python.exe` is also supported. Setup is incomplete if none succeeds because
+`/scrape`, `/rank`, `/apply`, `/outcome`, and `/gmail-sync` all use
+`tools/job_state.py` for safe dry-run-first state changes.
 
 ### Bun (for job search tools)
 
@@ -50,7 +56,7 @@ Install a LaTeX distribution to compile the generated `.tex` files to PDF:
 - **macOS:** [MacTeX](https://tug.org/mactex/)
 - **Linux:** `sudo apt install texlive-full` or `sudo dnf install texlive-scheme-full`
 
-The CV compiles with `lualatex` (pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors). The cover letter compiles with `xelatex` because `cover.cls` requires `fontspec` for its custom Lato/Raleway fonts.
+The one-page CV compiles with `lualatex`. The cover letter compiles with `xelatex` because `cover.cls` requires `fontspec` for its custom Lato/Raleway fonts.
 
 #### Minimal TeX install: TinyTeX/BasicTeX
 
@@ -230,7 +236,8 @@ All three paths produce the same result: fully populated profile files.
 
 | File | Content |
 |------|---------|
-| `CLAUDE.md` | Your full candidate profile |
+| `.claude/skills/job-application-assistant/01-candidate-profile.md` | Your canonical candidate profile |
+| `CLAUDE.md` | Workflow rules and a pointer to the canonical profile |
 | `01-candidate-profile.md` | Structured education, experience, skills |
 | `02-behavioral-profile.md` | Behavioral assessment |
 | `04-job-evaluation.md` | Personalized skill match areas and career goals |
@@ -301,7 +308,7 @@ Set-Location cv; lualatex main_<company>_<role>.tex; Set-Location ..
 Set-Location cover_letters; xelatex cover_<company>_<role>.tex; Set-Location ..
 ```
 
-These commands apply to the stock templates (moderncv CV, `cover.cls` cover letter). If you'd rather use your own LaTeX template, run `/add-template` — it captures the template's compile engine, fonts, style rules, and page limit, test-compiles it, and wires it into `/apply`. See the "LaTeX templates" section in the README.
+These commands apply to the stock templates (one-page single-column CV, `cover.cls` cover letter). If you'd rather use your own LaTeX template, run `/add-template` — it captures the template's compile engine, fonts, style rules, and page limit, test-compiles it, and wires it into `/apply`. See the "LaTeX templates" section in the README.
 
 ## 8. Pulling upstream updates into your fork
 
@@ -309,7 +316,7 @@ Upstream keeps improving the methodology files your fork has personalized, so pl
 
 **Prefer releases over raw `master`.** Tagged [releases](../../releases) are vetted checkpoints, each described in [CHANGELOG.md](CHANGELOG.md). Updating to a tag pulls a stable, documented state instead of whatever `master` happens to be mid-review. Fetch tags with `git fetch upstream --tags` and merge a release (for example `git merge v1.0.0`) when you want stability; pull `master` directly only when you specifically want the latest unreleased changes. The steps below apply either way - substitute the release tag for `upstream/master` where you see it.
 
-1. **Commit your personalization - but know where those commits land.** `/setup` edits CLAUDE.md and the profile skill files in place; those edits are *yours*, and committing them is what lets updates merge cleanly. But a GitHub **fork of this repo is public** - forks of public repositories cannot be made private - so anything you commit *and push to a fork* is visible to anyone. If you want your profile in a remote at all, don't push it to a fork: create a **private** repository, push there, and add this repo as the `upstream` remote (`git remote add upstream https://github.com/MadsLorentzen/ai-job-search.git`) to keep receiving updates. Committing locally without pushing is also fine. The genuinely sensitive files (tracker, salary data, `documents/`, application archives) are gitignored and never enter git either way. An uncommitted working tree is the most common reason `git pull` refuses to merge at all (`Your local changes ... would be overwritten`).
+1. **Commit your personalization - but know where those commits land.** `/setup` edits the profile skill files and structural templates in place; those edits are *yours*, and committing them is what lets updates merge cleanly. `CLAUDE.md` remains a thin workflow pointer. But a GitHub **fork of this repo is public** - forks of public repositories cannot be made private - so anything you commit *and push to a fork* is visible to anyone. If you want your profile in a remote at all, don't push it to a fork: create a **private** repository, push there, and add this repo as the `upstream` remote (`git remote add upstream https://github.com/MadsLorentzen/ai-job-search.git`) to keep receiving updates. Committing locally without pushing is also fine. The genuinely sensitive files (tracker, salary data, `documents/`, application archives) are gitignored and never enter git either way. An uncommitted working tree is the most common reason `git pull` refuses to merge at all (`Your local changes ... would be overwritten`).
 2. **Preview what changed before pulling:**
    ```bash
    git remote add upstream https://github.com/MadsLorentzen/ai-job-search.git   # first time only, if you cloned your own fork
@@ -338,9 +345,9 @@ This is expected if you haven't set up salary benchmarking. The `/apply` workflo
 Make sure Bun is installed and you ran `bun install` in each CLI directory. The tools require network access to fetch job listings.
 
 ### LaTeX compilation errors
-- CV: uses `lualatex` (pdflatex often fails on modern MiKTeX with `fontawesome5` font-expansion errors; lualatex handles the same sources cleanly)
+- CV: uses `lualatex`
 - Cover letter: uses `xelatex` (for custom fonts in `OpenFonts/fonts/`)
-- Make sure your LaTeX distribution includes the `moderncv` package
+- Make sure your LaTeX distribution includes the standard packages used by `cv/main_example.tex` (`geometry`, `xcolor`, `enumitem`, and `hyperref`)
 
 ### Fonts not found in cover letter
 The cover letter template expects fonts in `cover_letters/OpenFonts/fonts/`. Make sure this directory exists and contains the Lato and Raleway font files.

@@ -1,8 +1,14 @@
 ---
-framework_version: 1.0.2
+framework_version: 1.0.3
 ---
 
 # Cover Letter Templates and Tailoring Guide
+
+<!-- Candidate facts and reusable evidence live only in 01-candidate-profile.md. -->
+
+Read the candidate's name, contact details, and factual evidence from
+`01-candidate-profile.md` at runtime. Keep the placeholders below candidate-neutral; do
+not persist a person's facts or a role-specific letter in this method file.
 
 ## Template: Custom cover.cls (XeLaTeX)
 
@@ -21,6 +27,10 @@ cd cover_letters && xelatex -interaction=nonstopmode cover_<company>_<role>.tex
 Expected output: `Output written on cover_<company>_<role>.pdf (1 page, ...)`. Any page count other than 1 is a failure that must be fixed before presenting to the user.
 
 ## Compile-and-Inspect Loop (MANDATORY)
+
+This file owns the cover-letter template's build and repair procedure. The shared final
+artifact checks live in `10-application-verification.md`; `/apply` decides when that
+common checklist runs. Do not duplicate the common checklist here.
 
 After writing the cover letter and before presenting to the user, always compile and visually inspect the PDF. Iterate until the layout is clean:
 

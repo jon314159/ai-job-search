@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.0
+framework_version: 1.1.1
 ---
 
 # Web Research and Fetching
@@ -84,7 +84,10 @@ Try these in order and stop at the first that yields real content:
 1. **`WebFetch`** on the target URL. Cheapest, returns clean markdown.
 2. **Check `robots.txt`, then `curl` with browser headers** (above), then strip tags. Fixes the 403 class of failure. If `robots.txt` disallows the path for `*` or `Claude-User`, **skip this step entirely** and go to step 3.
 3. **`WebSearch`** for the company or role by name, to find an alternative canonical URL: the employer's own careers portal is almost always richer than the aggregator that surfaced the posting, and it carries the reference ID and grade that aggregators drop.
-4. **Declare it genuinely unavailable** only after 1 to 3 have failed. In `/rank` that means marking the entry `expired`; in `/apply` it means telling the user the posting could not be retrieved and stopping rather than drafting from the title.
+4. **Declare it unavailable** only after 1 to 3 have failed. In `/rank`, mark it
+   `unverified` for a bounded retry unless affirmative closure text, HTTP 404/410, or an
+   explicit passed deadline proves expiry. In `/apply`, stop only when no verified posting
+   text is available; never draft from a title alone.
 
 ### Login walls are a different failure
 

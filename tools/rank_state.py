@@ -28,7 +28,9 @@ Nothing here fetches a posting or judges a fit. Scoring stays with the model;
 this only removes the state file from the conversation.
 
 Usage:
-  python3 tools/rank_state.py candidates [--all] [--focus TEXT] [--limit N]
+  python3 tools/rank_state.py candidates [--all] [--include-dismissed]
+                                         [--focus TEXT] [--keys KEY,KEY]
+                                         [--limit N]
   python3 tools/rank_state.py sweep [--write] [--exclude KEY,KEY]
   python3 tools/rank_state.py apply --results results.json [--dry-run]
 
@@ -37,6 +39,7 @@ state error, or on `apply` when any result could not be written.
 """
 
 import argparse
+import copy
 import json
 import os
 import re
@@ -127,16 +130,36 @@ def entry_location_verdict(entry: dict) -> str | None:
 
 
 def cmd_candidates(args) -> int:
+    if args.include_dismissed and not args.all:
+        sys.exit("--include-dismissed requires --all")
     _, seen = load_state(args.state)
     excluded = tracker_pairs(args.tracker)
+    requested = {key for key in (args.keys or "").split(",") if key}
+    exact_keys = bool(args.keys)
 
     selected, skipped_tracker = [], 0
+    skipped_dismissed, rejected_requested = 0, 0
     for key, entry in seen.items():
+        if exact_keys and key not in requested:
+            continue
         status = entry.get("status")
-        if args.all:
-            if status == "skipped":
+        if exact_keys:
+            has_snapshot = all(
+                entry.get(field)
+                for field in ("posting_snapshot", "snapshot_fetched_at", "snapshot_sha256")
+            )
+            if status != "new" or not has_snapshot:
+                rejected_requested += 1
                 continue
-        elif status != "new":
+        elif args.all:
+            if status == "skipped" and not (
+                entry.get("skip_reason") == "user_not_interested" and args.include_dismissed
+            ):
+                continue
+        elif status not in ("new", "unverified"):
+            continue
+        if entry.get("skip_reason") == "user_not_interested" and not args.include_dismissed:
+            skipped_dismissed += 1
             continue
         if (norm(entry.get("company")), norm(entry.get("title"))) in excluded:
             skipped_tracker += 1
@@ -158,6 +181,10 @@ def cmd_candidates(args) -> int:
                 "portal": entry.get("portal"),
                 "deadline": entry.get("deadline"),
                 "posted_date": entry.get("posted_date"),
+                "authoritative_url": entry.get("authoritative_url"),
+                "posting_snapshot": entry.get("posting_snapshot"),
+                "snapshot_fetched_at": entry.get("snapshot_fetched_at"),
+                "snapshot_sha256": entry.get("snapshot_sha256"),
             }
         )
 
@@ -171,6 +198,9 @@ def cmd_candidates(args) -> int:
                 "selected": selected,
                 "deferred": max(0, eligible - len(selected)),
                 "excluded_by_tracker": skipped_tracker,
+                "excluded_dismissed": skipped_dismissed,
+                "rejected_requested": rejected_requested,
+                "missing_requested": sorted(requested - set(seen)),
                 "total_entries": len(seen),
             },
             indent=2,
@@ -248,7 +278,9 @@ def band(score: int) -> str:
 
 
 def cmd_apply(args) -> int:
-    doc, seen = load_state(args.state)
+    original_doc, _ = load_state(args.state)
+    doc = copy.deepcopy(original_doc)
+    seen = doc.get("seen") if isinstance(doc, dict) and "seen" in doc else doc
     today = args.today
     try:
         results = json.loads(Path(args.results).read_text(encoding="utf-8"))
@@ -259,19 +291,41 @@ def cmd_apply(args) -> int:
     if not isinstance(results, list):
         sys.exit("results file must be a JSON array of scoring objects")
 
-    rows, expired, errors = [], [], []
+    rows, expired, unverified, errors = [], [], [], []
     for result in results:
+        if not isinstance(result, dict):
+            errors.append({"key": None, "error": "each result must be an object"})
+            continue
         key = result.get("key")
         entry = seen.get(key)
         if entry is None:
             errors.append({"key": key, "error": "no such key in seen_jobs.json"})
             continue
 
-        if result.get("status") == "expired":
+        status = result.get("status")
+        if status == "expired":
             entry["status"] = "expired"
             expired.append(
                 {"key": key, "title": entry.get("title"), "company": entry.get("company"), "url": entry.get("url")}
             )
+            continue
+        if status == "unverified":
+            entry["status"] = "unverified"
+            retry_note = result.get("retry_note") or result.get("verification_note")
+            if retry_note:
+                entry["retry_note"] = str(retry_note)
+            unverified.append(
+                {
+                    "key": key,
+                    "title": entry.get("title"),
+                    "company": entry.get("company"),
+                    "url": entry.get("url"),
+                    "retry_note": entry.get("retry_note"),
+                }
+            )
+            continue
+        if status != "scored":
+            errors.append({"key": key, "error": "status must be scored, expired, or unverified"})
             continue
 
         try:
@@ -281,18 +335,57 @@ def cmd_apply(args) -> int:
             continue
 
         legacy = entry_location_verdict(entry)
+        gate_values = {
+            "eligibility_gate": result.get("eligibility_gate") or entry.get("eligibility_gate") or "FLAG",
+            "target_scope_gate": result.get("target_scope_gate") or entry.get("target_scope_gate") or "FLAG",
+            "location_verdict": result.get("location_verdict") or legacy or "FLAG",
+            "language_gate": result.get("language_gate") or entry.get("language_gate") or "FLAG",
+        }
+        invalid_gates = {name: value for name, value in gate_values.items() if value not in ("PASS", "FLAG", "FAIL")}
+        if invalid_gates:
+            errors.append({"key": key, "error": f"invalid gate values: {invalid_gates}"})
+            continue
+
         if entry.get("location") in ("PASS", "FAIL", "FLAG"):
             entry.pop("location", None)  # legacy verdict, never a place
         entry["status"] = "ranked"
         entry["rank_score"] = score
         entry["rank_verdict"] = band(score)
         entry["rank_date"] = today.isoformat()
-        entry["location_verdict"] = result.get("location_verdict") or legacy or "PASS"
-        entry["language_gate"] = result.get("language_gate") or "PASS"
-        if entry["language_gate"] == "PASS":
-            entry.pop("language_note", None)
-        else:
-            entry["language_note"] = result.get("language_note")
+        entry.update(gate_values)
+
+        note_pairs = {
+            "eligibility_gate": "eligibility_note",
+            "target_scope_gate": "target_scope_note",
+            "location_verdict": "location_note",
+            "language_gate": "language_note",
+        }
+        for gate, note in note_pairs.items():
+            if entry[gate] == "PASS":
+                entry.pop(note, None)
+            elif result.get(note) is not None:
+                entry[note] = result[note]
+
+        if isinstance(result.get("score_evidence"), dict):
+            entry["score_evidence"] = copy.deepcopy(result["score_evidence"])
+        for field in (
+            "selection_priority",
+            "geographic_priority",
+            "geographic_priority_note",
+            "evidence_confidence",
+            "source_confidence",
+            "requisition_id",
+            "posted_date",
+            "compensation",
+            "work_arrangement",
+            "employment_type",
+            "posting_snapshot",
+            "snapshot_fetched_at",
+            "snapshot_sha256",
+            "authoritative_url",
+        ):
+            if result.get(field) is not None:
+                entry[field] = copy.deepcopy(result[field])
         # Absence is not a correction: a fetch that degraded to a listing page
         # returns no deadline, and blanking a stored one would erase a real
         # date and make the entry immortal to rule 6's sweep.
@@ -310,12 +403,25 @@ def cmd_apply(args) -> int:
                 "title": entry.get("title"),
                 "company": entry.get("company"),
                 "location": entry.get("location"),
-                "url": entry.get("url"),
+                "url": entry.get("authoritative_url") or entry.get("url"),
                 "score": score,
                 "verdict": entry["rank_verdict"],
+                "selection_priority": entry.get("selection_priority"),
+                "eligibility_gate": entry["eligibility_gate"],
+                "eligibility_note": entry.get("eligibility_note"),
+                "target_scope_gate": entry["target_scope_gate"],
+                "target_scope_note": entry.get("target_scope_note"),
                 "location_verdict": entry["location_verdict"],
+                "location_note": entry.get("location_note"),
+                "geographic_priority": entry.get("geographic_priority"),
+                "geographic_priority_note": entry.get("geographic_priority_note"),
                 "language_gate": entry["language_gate"],
                 "language_note": entry.get("language_note"),
+                "evidence_confidence": entry.get("evidence_confidence"),
+                "source_confidence": entry.get("source_confidence"),
+                "compensation": entry.get("compensation"),
+                "work_arrangement": entry.get("work_arrangement"),
+                "employment_type": entry.get("employment_type"),
                 "deadline": entry.get("deadline"),
                 "posted_date": entry.get("posted_date"),
                 "urgent": bool(parsed and today <= parsed <= today + timedelta(days=URGENT_DAYS)),
@@ -324,11 +430,13 @@ def cmd_apply(args) -> int:
             }
         )
 
-    if not args.dry_run:
+    written = not args.dry_run and not errors
+    if written:
         save_state(args.state, doc)
 
     rows.sort(key=lambda r: (r["score"], r["urgent"]), reverse=True)
-    veto = lambda r: r["location_verdict"] == "FAIL" or r["language_gate"] == "FAIL"
+    gate_names = ("eligibility_gate", "target_scope_gate", "location_verdict", "language_gate")
+    veto = lambda r: any(r[name] == "FAIL" for name in gate_names)
     vetoed = [r for r in rows if veto(r)]
     ranked = [r for r in rows if not veto(r)]
     print(
@@ -337,8 +445,9 @@ def cmd_apply(args) -> int:
                 "ranked": ranked,
                 "vetoed": vetoed,
                 "expired": expired,
+                "unverified": unverified,
                 "errors": errors,
-                "written": not args.dry_run,
+                "written": written,
             },
             indent=2,
             ensure_ascii=False,
@@ -357,8 +466,14 @@ def main() -> int:
 
     cand = sub.add_parser("candidates", parents=[common], help="select the entries to score")
     cand.add_argument("--tracker", type=Path, default=TRACKER)
-    cand.add_argument("--all", action="store_true", help="include every non-skipped status")
+    cand.add_argument("--all", action="store_true", help="include every non-skipped status; expired jobs still require fresh live-open proof")
+    cand.add_argument(
+        "--include-dismissed",
+        action="store_true",
+        help="include skip_reason=user_not_interested; meaningful only with --all",
+    )
     cand.add_argument("--focus", help="substring filter over title, company and stored fit notes")
+    cand.add_argument("--keys", help="comma-separated exact keys; requires new entries with snapshot metadata")
     cand.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="0 for no cap")
     cand.set_defaults(func=cmd_candidates)
 

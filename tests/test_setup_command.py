@@ -1,13 +1,8 @@
-"""Guards for the /setup command spec.
+"""Guards for /setup's thin-pointer privacy contract.
 
-The command is a markdown spec (the spec IS the implementation). These tests pin
-one invariant that broke silently: Step 3 must personalise every contact block
-that `/apply` later compiles into a document. `cv/main_example.tex` was covered;
-the LaTeX blocks embedded in `05-cv-templates.md` and `06-cover-letter-templates.md`
-were not, so a full Path B/C run left `[YOUR_NAME]`, `[YOUR_EMAIL]` and
-`[YOUR_PHONE]` in both, and whether they reached a compiled cover letter depended
-on the drafter noticing. A real user (#420) ran `/setup` and then hand-edited both
-files to close the gap.
+Candidate facts belong in the canonical profile and generated artifacts. Reusable
+method/template files retain placeholders and read profile facts at runtime, preventing
+personal setup data from leaking into files intended to be shared upstream.
 """
 import unittest
 from pathlib import Path
@@ -39,27 +34,25 @@ def _substeps(step_body: str) -> dict[str, str]:
     return result
 
 
-class SetupStep3ContactBlocks(unittest.TestCase):
+class SetupStep3CandidateNeutralMethods(unittest.TestCase):
     def setUp(self):
         self.step3 = _sections(COMMAND.read_text(encoding="utf-8"))["Step 3: Generate Profile Files"]
-        self.substeps = _substeps(self.step3)
 
-    def _substep_for(self, filename: str) -> str:
-        matches = [body for heading, body in self.substeps.items() if filename in heading]
-        self.assertEqual(len(matches), 1, f"expected exactly one Step 3 substep for {filename}, got {len(matches)}")
-        return matches[0]
+    def test_method_files_are_explicitly_candidate_neutral(self):
+        self.assertIn("Keep method files candidate-neutral", self.step3)
+        self.assertIn("Do not personalize", self.step3)
+        for filename in (
+            "04-job-evaluation.md",
+            "05-cv-templates.md",
+            "06-cover-letter-templates.md",
+            "07-interview-prep.md",
+        ):
+            self.assertIn(filename, self.step3)
 
-    def test_cv_templates_substep_fills_the_contact_block(self):
-        body = self._substep_for("05-cv-templates.md")
-        self.assertIn("contact", body.lower())
-        for token in ("[FIRST_NAME]", "[YOUR_EMAIL]", "[YOUR_PHONE]"):
-            self.assertIn(token, body, f"the 05 substep must name {token} as something to replace")
-
-    def test_cover_letter_templates_get_their_own_substep(self):
-        body = self._substep_for("06-cover-letter-templates.md")
-        self.assertIn("signature", body.lower())
-        for token in ("[YOUR_NAME]", "[YOUR_EMAIL]", "[YOUR_PHONE]", "[YOUR_LINKEDIN_URL]"):
-            self.assertIn(token, body, f"the 06 substep must name {token} as something to replace")
+    def test_profile_files_own_candidate_facts(self):
+        self.assertIn("01-candidate-profile.md", self.step3)
+        self.assertIn("02-behavioral-profile.md", self.step3)
+        self.assertIn("runtime", self.step3)
 
     def test_completion_summary_lists_the_cover_letter_templates(self):
         step4 = _sections(COMMAND.read_text(encoding="utf-8"))["Step 4: Confirm & Next Steps"]
@@ -67,17 +60,18 @@ class SetupStep3ContactBlocks(unittest.TestCase):
         self.assertIn("06-cover-letter-templates.md", summary)
 
 
-class TemplatesStillCarryThePlaceholders(unittest.TestCase):
-    """The instructions above target real tokens; if a template renames them,
-    the instruction and this test must move together."""
+class TemplatesStayCandidateNeutral(unittest.TestCase):
 
-    def test_cv_templates_contact_block_tokens(self):
+    def test_cv_template_reads_candidate_facts_at_runtime(self):
         text = CV_TEMPLATES.read_text(encoding="utf-8")
-        for token in ("[FIRST_NAME]", "[LAST_NAME]", "[YOUR_EMAIL]", "[YOUR_PHONE]"):
-            self.assertIn(token, text)
+        self.assertIn("01-candidate-profile.md", text)
+        self.assertIn("at runtime", text)
+        self.assertNotIn("BEGIN ACTIVE-TEMPLATE", text)
 
-    def test_cover_letter_templates_contact_and_signature_tokens(self):
+    def test_cover_letter_template_keeps_generic_tokens(self):
         text = COVER_TEMPLATES.read_text(encoding="utf-8")
+        self.assertIn("01-candidate-profile.md", text)
+        self.assertIn("at runtime", text)
         for token in ("[YOUR_NAME]", "[YOUR_EMAIL]", "[YOUR_PHONE]", "[YOUR_LINKEDIN_URL]"):
             self.assertIn(token, text)
         self.assertIn("\\signature{[YOUR_NAME]}", text)

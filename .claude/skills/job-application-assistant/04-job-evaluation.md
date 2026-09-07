@@ -1,40 +1,55 @@
 ---
-framework_version: 1.2.6
+framework_version: 1.3.1
 ---
 
 # Job Evaluation Framework
 
-<!-- SETUP: Skill match areas and career goals are personalized by running /setup -->
+<!-- Candidate-specific facts and preferences are read from 01-candidate-profile.md. -->
 
 ## Eligibility Gate — run before scoring
 
-If the candidate is not a citizen or permanent resident of the country they are applying in, run this first. It is a hard filter, not a scoring dimension, and it is separate from work-permit *timing*: timing asks "can they work the required hours yet?", eligibility asks "are they permitted to hold this job at all?". A candidate can pass timing and still be categorically excluded.
+Read the canonical Identity, Reusable Application Answers, and Constraints fields in
+`01-candidate-profile.md` before applying this gate. Continue checking postings for
+citizenship, permanent-residency, security-clearance, or other role-specific restrictions;
+general work authorization never overrides a narrower requirement.
+
+Run this gate for every posting. It is a hard filter, not a scoring dimension, and it is
+separate from work-permit *timing*: timing asks "can they work the required hours yet?",
+eligibility asks "are they permitted to hold this job at all?" Never infer citizenship,
+permanent residency, export-control status, or clearance eligibility from general work
+authorization or from silence in the profile.
 
 Read the posting's eligibility / work rights / "who can apply" section **verbatim** and classify:
 
 | Posting wording | Verdict |
 |-----------------|---------|
-| Names a **citizenship or permanent-residency requirement** ("must be a citizen of X", "permanent resident", "PR required", "full working rights" where the employer means citizen/PR) | **FAIL — hard stop.** Do not score, do not draft. Quote the exact wording back to the user. |
-| Requires a **security clearance** at any level | **FAIL** in most countries, since clearance is normally gated on citizenship. Verify the specific scheme rather than assuming. |
+| Names a **citizenship, permanent-residency, export-control, or ability-to-obtain-clearance requirement**, but the needed status is not recorded in the canonical profile | **FLAG — needs confirmation.** Quote the wording and ask; never infer a sensitive status. |
+| Requires an **existing active clearance** that the canonical profile does not record | **FAIL — hard stop** unless the profile is corrected. |
+| Names a restriction that directly conflicts with a status explicitly recorded in the canonical profile | **FAIL — hard stop.** Do not score or draft. |
+| Requires ordinary authorization to work without sponsorship, and the canonical profile explicitly confirms that | **PASS.** |
 | **Explicitly names** the candidate's permit class, or says "international applicants welcome", "visa holders considered", "we sponsor" | **PASS** — verified acceptance. Worth noting as a positive in the application. |
-| **Silent** on citizenship or residency | **PROCEED, but mark unverified.** Check the employer's own careers or international-applicant page before drafting. |
+| **Silent** on citizenship or residency | **PASS** for ordinary work authorization. For government, defence, critical-infrastructure, export-control, or named graduate-program streams, use **FLAG** until the program page is checked. |
 
 **Two rules that are easy to get wrong:**
 
-1. **Silence is not permission.** Large graduate programs frequently gate eligibility on their own website rather than in the job ad. Highest-risk categories: professional-services firms, government and defence, banking, telecommunications, and anything touching critical infrastructure.
+1. **Silence is not evidence of a sensitive status.** Ordinary roles may pass on the
+   profile's recorded work authorization, but high-risk programs require a program-page
+   check and a FLAG when the narrower eligibility cannot be confirmed.
 2. **A company-wide "we accept international applicants" statement is not role-level permission.** The common pattern is a general welcome followed by a *named list* of the specific programs or service lines it covers. Confirm the **specific posting or stream** appears on that list before drafting.
 
 **Report an eligibility failure to the user with the quoted source** rather than silently dropping the role. They may know something about their own status that the profile does not record.
 
 If the candidate's permit also constrains *hours* or *start date* (a student visa with a term-time cap, a permit that begins on graduation), record that as a second gate under this section during `/setup`, with the specific dates. Do not merge it with the eligibility question above — they fail for different reasons and need different answers.
 
-A role that fails this gate is not scored and not drafted. Everything below applies only to roles that pass it.
+A role that fails this gate is not scored and not drafted. A material FLAG is scored but
+requires the user's confirmation before drafting. Everything below applies only to PASS
+or explicitly accepted FLAG roles.
 
 ## Language Gate — run before scoring
 
 This gate checks a posting's language requirements against what the candidate actually speaks. It is not one of the five Scoring Dimensions below - it runs before them, structured the same way as the Eligibility Gate above: read the posting, classify against profile data, and treat a hard mismatch as FAIL before scoring. Its verdict is tracked downstream: `/rank` records the result as `language_gate` (PASS/FAIL/FLAG) with a supporting `language_note`, persists both into `seen_jobs.json`, and treats a FAIL as a shortlist veto; `/scrape` surfaces the flag in its results table and carries a language-override rule for postings whose ad language differs from the role's working language. `/apply`'s language detection (Step 1, which extracts a posting's required language generically) feeds this same check.
 
-Read the posting's language requirements as stated for **the role itself** — not the language the ad happens to be written in. A posting written in a language you don't work in, for a role that only needs languages you do work in on the job, passes fine; only an explicit job-condition requirement ("fluent X required," "must communicate with the Y team in Z") triggers this check. For each language the posting requires as a job condition, compare it against your Languages table in CLAUDE.md / `01-candidate-profile.md`:
+Read the posting's language requirements as stated for **the role itself** — not the language the ad happens to be written in. A posting written in a language you don't work in, for a role that only needs languages you do work in on the job, passes fine; only an explicit job-condition requirement ("fluent X required," "must communicate with the Y team in Z") triggers this check. For each language the posting requires as a job condition, compare it against the canonical Languages table in `01-candidate-profile.md`:
 
 | Posting requirement vs. your Languages table | Verdict |
 |---|---|
@@ -45,6 +60,22 @@ Read the posting's language requirements as stated for **the role itself** — n
 Judge the level comparison the same way you judge everything else in this framework: read both sides as written and reason about it, don't force either into a rigid scale — CEFR letters, LinkedIn-style buckets ("professional working proficiency"), and plain-English words ("conversational," "fluent," "native") all appear in the wild and don't map onto each other precisely. When genuinely unsure whether a stated bar exceeds the candidate's level, prefer FLAG over a silent PASS — the human is meant to be the tiebreaker, not the gate.
 
 **Worked example:** a candidate whose Languages table lists Spanish (Native) and English (B1/B2). A posting requiring "fluent Russian" → **FAIL**, Russian isn't declared at all. A posting requiring "fluent English" → **FLAG**, English is declared but "fluent" plausibly exceeds B1/B2 — score and draft the application, but tell the candidate this posting's bar may be a stretch and let them decide. A posting requiring "conversational English" or unspecified English → **PASS**, B1/B2 clears a "conversational" bar cleanly.
+
+## Target Scope Gate — run before scoring
+
+Compare the full posting against the canonical Target Work, Exclusions, employer
+exclusions, seniority, and mandatory licence/certification constraints in
+`01-candidate-profile.md`:
+
+- **FAIL:** the full posting clearly establishes excluded work or employer, internal-only
+  eligibility, excluded seniority, or a mandatory licence/certification the profile cannot
+  satisfy. Quote the evidence; do not allow a high weighted score to hide it.
+- **FLAG:** the wording is ambiguous, the requirement may be preferred rather than
+  mandatory, or the role mixes target work with a material amount of excluded work.
+- **PASS:** no canonical target-scope exclusion is established.
+
+Cheap title/snippet filtering may remove only obvious cases. Ambiguous roles survive to
+the full-posting gate so an overloaded title is not treated as proof.
 
 ## Scoring Dimensions
 
@@ -60,9 +91,10 @@ How well do the required/preferred skills align with the candidate's capabilitie
 | 40-59 | Partial match, significant upskilling needed |
 | 0-39 | Fundamental mismatch |
 
-**Strong match areas:** [YOUR_PRIMARY_SKILLS]
-**Moderate match areas:** [YOUR_SECONDARY_SKILLS]
-**Weak match areas:** [SKILLS_YOU_LACK]
+Use `01-candidate-profile.md`'s Technical Skills and labeled evidence scope directly:
+professional experience is demonstrated evidence; academic, hypothetical, self-directed,
+and coursework items retain those labels. A requirement absent from the canonical profile
+is a genuine gap. Do not maintain a second candidate-specific skill list here.
 
 ### 2. Experience Match (0-100)
 Does work history align with what they're looking for? Match on the function and nature of the work performed, not the literal job title - a "Data Consultant" and a "Data Scientist" role can be functionally identical.
@@ -74,9 +106,9 @@ Does work history align with what they're looking for? Match on the function and
 | 40-59 | Adjacent experience, would need to make the case |
 | 0-39 | Unrelated experience |
 
-**Strong:** [YOUR_DIRECT_EXPERIENCE_DOMAINS]
-**Moderate:** [YOUR_ADJACENT_EXPERIENCE]
-**Entry-level:** [ROLES_WITH_LIMITED_EXPERIENCE]
+Use `01-candidate-profile.md`'s Professional Experience and Independent Projects. Match
+the work performed and preserve each item's evidence label; do not infer experience from
+a target title or copy a candidate-specific experience map into this framework.
 
 ### 3. Behavioral/Culture Fit (0-100)
 Does the role and company culture match the behavioral profile?
@@ -88,13 +120,17 @@ Does the role and company culture match the behavioral profile?
 | 40-59 | Some friction areas |
 | 0-39 | Significant culture mismatch |
 
-**Red flags to research:** Department disorganization, work dominated by maintenance over development, poor chemistry with leadership, culture mismatches. Check reviews, media coverage, LinkedIn connections, and network contacts for insider perspective.
+Use `02-behavioral-profile.md` for the candidate-specific thrive/drain evidence. Research
+company and department signals rather than inferring culture from the posting's tone.
+During `/rank` triage, where company research is intentionally skipped, score only explicit
+role structure and work-environment signals against that profile. Use 50 with LOW
+confidence when the posting lacks those signals; never label posting tone as company
+culture. `/apply` replaces this provisional score after cache-first company research.
 
 ### 4. Location & Logistics (Pass/Fail + Notes)
-- Within commute range: PASS
-- Remote with occasional office: PASS
-- Requires relocation: FAIL (deal-breaker)
-- Frequent international travel: FLAG (discuss with user)
+Apply the canonical location, geographic scope, and flexibility preferences from
+`01-candidate-profile.md`. A hard scope mismatch is FAIL; case-by-case preferences are
+notes or FLAGs, not invented vetoes.
 
 ### 5. Career Alignment & Motivation (0-100)
 Does this role advance career goals and contain tasks that energize?
@@ -106,20 +142,10 @@ Does this role advance career goals and contain tasks that energize?
 | 40-59 | Decent job but doesn't build toward career goals |
 | 0-39 | Dead end or backwards step |
 
-**Career goals:**
-- [YOUR_CAREER_GOAL_1]
-- [YOUR_CAREER_GOAL_2]
-- [YOUR_CAREER_GOAL_3]
-
-**Motivation filter:** Evaluate not just whether you *can* do the tasks, but whether the tasks will *energize* you. Consider:
-- Tasks that energize: [YOUR_ENERGIZING_TASKS]
-- Tasks that drain: [YOUR_DRAINING_TASKS]
-- Non-task factors: leadership style, department culture, company values, degree of autonomy
-
-**Life situation alignment:** Consider personal constraints:
-- **Security**: [YOUR_FINANCIAL_SITUATION_CONTEXT]
-- **Flexibility**: [YOUR_SCHEDULE_CONSTRAINTS]
-- **Professional development**: [YOUR_GROWTH_PRIORITIES]
+Read `01-candidate-profile.md`'s Job Search Preferences once and evaluate the role against
+its Target Work, Motivating Work, Exclusions, location constraints, and professional-
+development priorities. Those canonical values own the candidate-specific content; this
+file owns only the scoring method.
 
 ### 6. Salary Benchmark (Optional)
 
@@ -152,6 +178,9 @@ Present the evaluation as:
 
 | Dimension | Score | Notes |
 |-----------|-------|-------|
+| Eligibility | PASS/FLAG/FAIL | [quoted restriction and profile evidence] |
+| Target Scope | PASS/FLAG/FAIL | [full-posting evidence] |
+| Language | PASS/FLAG/FAIL | [quoted requirement and declared level] |
 | Technical Skills | XX/100 | [brief note] |
 | Experience Match | XX/100 | [brief note] |
 | Behavioral Fit | XX/100 | [brief note] |
@@ -159,6 +188,8 @@ Present the evaluation as:
 | Career Alignment | XX/100 | [brief note] |
 
 **Overall Score: XX/100** (weighted average of scored dimensions)
+
+**Evidence confidence: HIGH/MEDIUM/LOW** - name missing or ambiguous evidence
 
 ### Verdict: [Strong Fit / Good Fit / Moderate Fit / Weak Fit / Poor Fit]
 
@@ -231,6 +262,10 @@ verification rule above. If it is missing or stale, research per the checklist a
 then write (or overwrite) the file with fresh findings and today's date, so the next
 consumer benefits.
 
+A refresh is a local discovery-cache write, not authorization to apply, publish, or make
+an external change. Refresh it only when the active workflow actually needs company
+research, including an evaluation-only run whose final score depends on that evidence.
+
 ## Weighting
 - Technical Skills: 30%
 - Experience Match: 25%
@@ -241,7 +276,8 @@ consumer benefits.
 
 ## Thresholds
 - **Strong Fit** (75+): Definitely apply, tailor everything
-- **Good Fit** (60-74): Apply, address gaps in cover letter
+- **Good Fit** (60-74): Apply; keep gaps visible in the evaluation and selectively bridge
+  material ones only when a cover letter or form response exists
 - **Moderate Fit** (45-59): Consider carefully, discuss with user
 - **Weak Fit** (30-44): Probably skip unless strategic reasons
 - **Poor Fit** (<30): Skip

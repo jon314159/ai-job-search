@@ -101,6 +101,7 @@ tmp/
 /app_*.txt
 /www_*.txt
 /job_scraper/run_*/
+**/job_scraper/analysis_cache/
 
 # Upskill reports (personal output). Depth-independent like the job_scraper
 # rules above: the upskill skill resolves `upskill/` relative to its own

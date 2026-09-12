@@ -62,12 +62,16 @@ State how many jobs will be ranked and how many are deferred before proceeding.
 
 ## Step 2: Batch-Fetch and Score
 
-Resolve the posting text once in the main context before dispatching any scoring workers:
+Resolve the posting snapshot once on disk before analysis or dispatching scoring workers.
+Use `tools/scrape_pipeline.py` as described in
+[the local pipeline reference](../skills/job-scraper/references/local-pipeline.md).
+Keep full state and prior batches out of the prompt; the following verification rules
+remain mandatory:
 
 1. If the entry has `posting_snapshot`, `snapshot_fetched_at`, and `snapshot_sha256`, run
    `<PYTHON> tools/job_state.py snapshot-verify --path "<posting_snapshot>"
    --expected-sha "<snapshot_sha256>" --fetched-at "<snapshot_fetched_at>"`. A `valid`
-   result means to read that snapshot and make no network request.
+   result means to read that snapshot through bounded `packet` calls and make no network request.
 2. Otherwise fetch the entry's `authoritative_url` (falling back to `url`) through the
    escalation order in `09-web-research.md`. Verify the content matches the expected
    company and title. On success, replace `job_scraper/postings/<sha256-of-canonical-url>.md`
@@ -89,7 +93,7 @@ limit. Workers return results; the owner validates and persists them. Do not spa
 agent merely to change the model for a few jobs. Token-efficiency rules:
 
 - Pass each agent everything it needs **inline in the prompt**: title, company, canonical
-  URL, the verified full snapshot text, and a compact scoring rubric extracted from the
+  URL, the verified full snapshot text delivered losslessly in bounded packets, and a compact scoring rubric extracted from the
   files you read in Step 1. Include the strong/moderate/weak skill match areas,
   direct/adjacent experience domains, behavioral thrive/drain factors, career goals,
   deal-breakers, eligibility/language/target-scope gates, and location constraints. Do
@@ -105,6 +109,23 @@ agent merely to change the model for a few jobs. Token-efficiency rules:
   malformed worker JSON and allow one bounded repair before leaving those entries
   `unverified`; never partially persist a malformed result.
 
+Default to one job at a time or at most five jobs / 12,000 posting characters per batch.
+Read every `next_part`; an incomplete packet cannot establish a PASS or final score.
+Keep a compact quoted requirements/gates checklist across parts. In `--from-scrape`
+reuse the evidence just extracted during full-posting gates; do not print descriptions
+again. Retain only structured decisions from previous jobs, not full prior postings.
+Paging bounds new tool output but does not reset conversation history; use runtime
+compaction/checkpoints when available instead of accumulating full batches indefinitely.
+
+Before semantic analysis, `scrape_pipeline.py cache --base <BASE> --key <key>` may return
+a completed triage result only for an unchanged, hash-verified <=24-hour snapshot and
+unchanged profile/preferences/rubric. Explicit `--all` or a user-requested reassessment
+uses `--force` and recomputes. Do not reuse `/apply` evaluations or bypass deadline,
+current state, dismissal, tracker, or final live-availability checks. Store a completed
+result with `snapshot_sha256` and ordered `reviewed_parts` covering all parts read.
+Use deterministic score aggregation/persistence in the helper; semantic dimension
+scores, evidence, gaps, and location judgments still follow the rubric below.
+
 Produce a JSON array (directly or from each worker), one object per job:
 
 ```json
@@ -116,7 +137,7 @@ Produce a JSON array (directly or from each worker), one object per job:
   "eligibility_gate": "PASS" | "FAIL" | "FLAG",
   "eligibility_note": "<quoted restriction and profile evidence, when FLAG or FAIL>",
   "target_scope_gate": "PASS" | "FAIL" | "FLAG",
-  "target_scope_note": "<sales/seniority/employer/licence or other must-have evidence>",
+  "target_scope_note": "<function/employer/education-and-level alignment or other must-have evidence>",
   "location_verdict": "PASS" | "FAIL" | "FLAG",
   "location_note": "<hard scope failure or case-by-case logistics note>",
   "geographic_priority": "PREFERRED_REMOTE" | "PREFERRED_REGION" | "OUTSIDE_PREFERENCE" | "UNKNOWN",
@@ -142,6 +163,12 @@ unstated citizenship/permanent-residency status is FLAG when the posting require
 never an inferred PASS or FAIL. Existing active clearance requirements can FAIL when the
 profile records no active clearance. `language_gate` is distinct from `language`, which
 just records what language the posting is written in.
+
+Use `target_scope_gate` to enforce education and level alignment from the full posting.
+Do not require a college-degree line as a condition of consideration. PASS a role without
+one when its duties and progression fit the target professional work; FAIL clear likely
+underemployment or a mandatory level materially beyond the candidate's evidence; FLAG an
+ambiguous boundary and quote the duties or requirements that create the uncertainty.
 
 Scoring uses the dimension definitions from `04-job-evaluation.md` verbatim. The honesty rule applies to triage too: gaps are stated, never smoothed over, and a posting that is a poor fit gets a low score even if it looks prestigious.
 
@@ -200,8 +227,9 @@ preferred geography.
 
 For jobs in the same verdict band or within three points, set a separate
 `selection_priority` using geographic priority first, then fewer must-have gaps, stronger
-demonstrated (not merely coursework) evidence, higher evidence/source confidence,
-compensation transparency, lower application effort, recency, and deadline urgency. Do
+demonstrated (not merely coursework) evidence, better education-and-level alignment,
+higher evidence/source confidence, compensation transparency, lower application effort,
+recency, and deadline urgency. Do
 not alter the fit score. Build an **Apply first** group of at most three preferred-location
 jobs and up to two backups; exceptional 75+ outside-preference roles may fill unused slots
 but must retain their explicit location label. Never pad the actionable list below 60.
@@ -289,6 +317,10 @@ Rules for the presentation:
 
 - Every table (shortlist, below threshold, excluded) includes the posting URL as a clickable link - use the `url` in `apply`'s output (not the entry's key, which for some portals is a company+title composite rather than the URL), so this never requires an extra lookup. Never drop the link for brevity.
 - A shortlisted job with `language_gate: FLAG` gets a ⚠ marker next to its Title (same treatment as a location FLAG) and its `language_note` quoted in that job's "Why these ranked highest" writeup, so the language-level gap is visible without digging into the raw JSON.
+- A shortlisted job with `target_scope_gate: FLAG` for education or level alignment gets
+  the same ⚠ marker and its `target_scope_note` in the writeup. Excluded level-mismatch
+  roles must state whether the evidence showed likely underemployment or requirements
+  materially beyond the candidate's evidenced level.
 - Show compensation, work arrangement, posted date, and evidence/source confidence when
   stated. Do not invent absent values.
 - Label every displayed role as preferred remote, preferred region, outside preference,
@@ -313,6 +345,9 @@ Rules for the presentation:
 3. **Triage depth only.** No company research, no salary lookups, no reviewer agents - `/rank` exists to be cheap enough to run on every scrape batch.
 4. **Deal-breakers veto scores.** A 90-point job that fails eligibility, target scope,
    location, or language is excluded, not ranked first.
+   Degree wording alone is never a target-scope veto; judge actual duties, responsibility,
+   progression, and mandatory experience so the shortlist avoids both likely
+   underemployment and roles materially beyond the candidate's evidenced level.
 5. **State moves through the helper, not the context.** `seen_jobs.json` is selected,
    swept, and updated by `tools/rank_state.py`; never load or re-emit the whole backlog.
 6. **Honest scoring.** Each score's gaps are reported and persisted with it. The score bands and weights come

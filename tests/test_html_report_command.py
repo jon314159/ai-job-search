@@ -64,7 +64,7 @@ class HtmlReportTrackerFieldTests(unittest.TestCase):
     # clean list diff naming the missing column instead.
     CANONICAL_HEADER = re.search(
         r"^\s*(date,company,[a-z_,]+)$",
-        (REPO_ROOT / ".claude" / "commands" / "apply.md").read_text(encoding="utf-8"),
+        (REPO_ROOT / ".claude/skills/job-application-assistant/references/apply-workflow.md").read_text(encoding="utf-8"),
         re.M,
     ).group(1).split(",")
 

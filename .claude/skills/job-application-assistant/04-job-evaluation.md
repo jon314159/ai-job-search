@@ -1,5 +1,5 @@
 ---
-framework_version: 1.3.1
+framework_version: 1.3.2
 ---
 
 # Job Evaluation Framework
@@ -63,16 +63,29 @@ Judge the level comparison the same way you judge everything else in this framew
 
 ## Target Scope Gate — run before scoring
 
-Compare the full posting against the canonical Target Work, Exclusions, employer
-exclusions, seniority, and mandatory licence/certification constraints in
-`01-candidate-profile.md`:
+Compare the full posting against the canonical Target Work, Education and Level
+Alignment, Exclusions, employer exclusions, seniority, and mandatory
+licence/certification constraints in `01-candidate-profile.md`:
 
 - **FAIL:** the full posting clearly establishes excluded work or employer, internal-only
   eligibility, excluded seniority, or a mandatory licence/certification the profile cannot
-  satisfy. Quote the evidence; do not allow a high weighted score to hide it.
+  satisfy. Also fail a role that is clearly likely underemployment under the profile (for
+  example, primarily routine clerical, dispatch, generic customer-service, or basic
+  administrative execution with no meaningful target analytical/process/systems work or
+  progression), or a role whose mandatory level and specialized experience are materially
+  beyond the candidate's evidenced level. Quote the evidence; do not allow a high weighted
+  score to hide it.
 - **FLAG:** the wording is ambiguous, the requirement may be preferred rather than
-  mandatory, or the role mixes target work with a material amount of excluded work.
-- **PASS:** no canonical target-scope exclusion is established.
+  mandatory, the role mixes target work with a material amount of excluded work, or its
+  professional level could reasonably be either appropriate or under/over-level.
+- **PASS:** no canonical target-scope exclusion is established, and the duties and level
+  are consistent with the profile's target professional scope.
+
+A college-degree requirement is not a proxy for professional fit. The absence of a degree
+requirement never fails a role by itself; a no-degree-required role can pass when its actual
+duties, responsibility, and progression align with the target work. A required or preferred
+degree is positive career-alignment evidence, but it never overrides a level mismatch or an
+excluded function.
 
 Cheap title/snippet filtering may remove only obvious cases. Ambiguous roles survive to
 the full-posting gate so an overloaded title is not treated as proof.
@@ -264,7 +277,8 @@ consumer benefits.
 
 A refresh is a local discovery-cache write, not authorization to apply, publish, or make
 an external change. Refresh it only when the active workflow actually needs company
-research, including an evaluation-only run whose final score depends on that evidence.
+research. An evaluation-only run may read the cache and research missing evidence,
+but must not refresh the cache or write any other files.
 
 ## Weighting
 - Technical Skills: 30%

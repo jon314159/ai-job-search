@@ -131,6 +131,10 @@ saves one reusable posting snapshot, automatically ranks the new batch, and pres
 the top actionable matches. `/rank --all` remains available for recalibration; it is no
 longer a required second step after `/scrape`.
 
+`/scrape` also uses Indeed as a discovery-only WebSearch lane. It does not scrape Indeed
+pages: each lead must resolve to a matching employer or ATS posting before it can enter the
+normal dedupe, eligibility, snapshot, ranking, and application workflow.
+
 ### 5. Apply to a job
 
 ```bash

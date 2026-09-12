@@ -18,7 +18,7 @@ class ModelRoutingContractTests(unittest.TestCase):
         cls.routing = read(".agents/skills/luna-sol-routing/references/job-search-workflow.md")
         cls.packet = read(".agents/skills/luna-sol-routing/references/task-packet.md")
         cls.rank = read(".claude/commands/rank.md")
-        cls.apply = read(".claude/commands/apply.md")
+        cls.apply = read(".claude/skills/job-application-assistant/references/apply-workflow.md")
         cls.interview = read(".claude/commands/interview.md")
         cls.scrape = read(".claude/skills/job-scraper/SKILL.md")
         cls.config = tomllib.loads(read(".codex/config.toml"))

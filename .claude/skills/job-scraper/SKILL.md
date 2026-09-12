@@ -4,7 +4,7 @@ description: >
   Use for /scrape, multi-source job discovery against the candidate profile, scrape
   health, or requests to find and shortlist new opportunities. This is the sole generic
   job-discovery entry point; it selects enabled portal skills as needed.
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(bun run .agents/skills/*/cli/src/cli.ts *), Bash(python tools/job_state.py *), Bash(python3 tools/job_state.py *), Bash(py -3 tools/job_state.py *), WebFetch, WebSearch, Agent, AskUserQuestion
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(bun run .agents/skills/*/cli/src/cli.ts *), Bash(python tools/job_state.py *), Bash(python3 tools/job_state.py *), Bash(py -3 tools/job_state.py *), Bash(python tools/scrape_pipeline.py *), Bash(python3 tools/scrape_pipeline.py *), Bash(py -3 tools/scrape_pipeline.py *), WebFetch, WebSearch, Agent, AskUserQuestion
 ---
 
 # Job Scraper
@@ -14,7 +14,8 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(bun run 
 ## How It Works
 
 This skill searches job portals using the **installed portal-search CLIs** in
-`.agents/skills/` (plus WebSearch as a fallback), using queries from your profile.
+`.agents/skills/`, bounded WebSearch coverage (including Indeed discovery), and
+queries from your profile.
 It normalizes and deduplicates cheap search results before any detail fetch, stores one
 verbatim posting snapshot for reuse, automatically ranks the surviving jobs, and presents
 one actionable shortlist.
@@ -38,16 +39,23 @@ Optional arguments:
 
 ### Step 0: Load State
 
-1. Read `job_scraper/seen_jobs.json` (create if missing - start with `{"seen": {}}`)
-2. Read `job_search_tracker.csv` to extract already-applied companies+roles
+1. Resolve `<BASE>` to the directory containing the canonical private profile, tracker,
+   and `job_scraper/seen_jobs.json`. A Git worktree may lack ignored private files: inspect
+   the known primary checkout once, not a recursive search of the workspace or memories.
+   Do not create an empty replacement state merely because a worktree lacks it.
+2. Use `tools/scrape_pipeline.py prepare --base <BASE>` to read state and tracker in code;
+   keep the complete JSON/CSV out of model context. A genuinely new configured workspace
+   may start with `{"seen": {}}`. Read [the local pipeline reference](references/local-pipeline.md)
+   once for the file-based commands used throughout this run.
 3. Read `search-queries.md` (this directory) for the search strategy
 4. Read `.claude/skills/job-application-assistant/01-candidate-profile.md` once for
    current search scope, languages, target work, and exclusions. Read
    `02-behavioral-profile.md` plus the gates and compact rubric in
    `04-job-evaluation.md` once. Reuse this context through Steps 1.5-4.25; do not re-read
    these files per job.
-5. Resolve a Python 3 runtime once as `<PYTHON>`: try `.venv/Scripts/python.exe` first,
-   then `python`, `py -3`, or `python3`. Use that exact executable for every `tools/job_state.py`
+5. Resolve a Python 3 runtime once as `<PYTHON>`: check `<BASE>/.venv/Scripts/python.exe`
+   first, then discover an available `python`, `py -3`, or `python3` without executing
+   a series of missing commands. Use that exact executable for every `tools/job_state.py`
    and PDF-helper call in this run. Python is a core workflow dependency, not only an
    optional salary dependency; if none is available, stop before changing state and
    report the setup command from `SETUP.md`.
@@ -56,16 +64,23 @@ Optional arguments:
    their snapshots in Step 2 and include them in ranking, so a prior interruption cannot
    strand them forever.
 
+Keep startup reads targeted: do not dump all of `MEMORY.md`, recursively grep every
+skill, reload routing, or read this skill again during the run. Reuse the profile/rubric
+already loaded. Preserve all selected search lanes and categories; reduce context volume,
+not discovery coverage. Keep the current capable owner; no agent per job or extra review.
+
 ### Step 1: Search
 
-Read `search-queries.md` (this directory) for the search strategy. By default, run the top 3 priority query categories. If the user said "broad", run all categories. If the user specified a focus area (e.g. "data science"), prioritize queries from that category.
+Reuse `search-queries.md` loaded in Step 0. By default, run the top 3 priority query categories. If the user said "broad", run all categories. If the user specified a focus area (e.g. "data science"), prioritize queries from that category.
 
-Use three complementary coverage lanes:
+Use four complementary coverage lanes:
 
 1. enabled installed portal CLIs;
 2. a bounded direct-employer/ATS WebSearch lane for each selected query category, even
-   when portal CLIs succeed; and
-3. authenticated Handshake in the signed-in interactive browser when that capability is
+   when portal CLIs succeed;
+3. a bounded Indeed discovery lane through WebSearch, followed by employer/ATS
+   verification; and
+4. authenticated Handshake in the signed-in interactive browser when that capability is
    available. If it is unavailable, report `Handshake: not searched (signed-in browser
    unavailable)`; public WebSearch is not a substitute for authenticated Handshake.
 
@@ -125,10 +140,41 @@ Use the site-specific query strings from `search-queries.md` directly as WebSear
 
 Tag each fallback result as WebSearch-sourced, keeping the portal tag when the fallback stands in for an installed portal whose CLI failed. Step 4 persists this as the entry's `source`, and Step 5 reports which portals ran on the fallback this run.
 
+#### 1d. Indeed discovery (WebSearch only)
+
+Indeed is a discovery source, not an installed portal CLI. For each selected query
+category, run at most one WebSearch query shaped like:
+
+```text
+site:indeed.com/viewjob "<role terms>" "<configured location or remote>"
+```
+
+Use a 14-day search recency filter when the runtime supports one and keep at most 10
+relevant results per query. Treat result titles, URLs, and snippets as leads only. Tag
+each lead with `source: websearch`, `portal: indeed-discovery`, and retain its Indeed URL
+as `discovered_url`.
+
+Do not fetch or crawl Indeed listing pages, create an Indeed CLI, use browser automation
+to bypass access controls, or retry blocked Indeed pages. Indeed's current terms restrict
+automated access, and its documented APIs do not provide a general job-seeker search API.
+An Indeed lead first goes through Step 1.5's cheap title/company/URL dedupe and hard gates.
+Only a survivor gets the Step 2 employer search and fetch: use its company and exact title
+to find the employer's own careers page or ATS posting. Use a matching page as `url` and
+`authoritative_url`; preserve the Indeed URL only as `discovered_url`. If no matching
+authoritative posting can be found, drop the lead from the run rather than persisting or
+ranking an unverified Indeed result.
+
 ### Step 1.5: Normalize, Deduplicate & Gate Before Detail Fetches
 
 Work only from the search-result fields and snippets already returned in Step 1. This is
 the cheapest point in the workflow, so eliminate work here before spending a detail call.
+
+Save CLI JSON directly under `job_scraper/run_<id>/`; do not print it wholesale. Normalize
+web/browser discovery into the same field contract. Run `scrape_pipeline.py prepare`
+over all source files, then read its result with `page` (at most five cards by default).
+This deterministically consolidates exact identities and tracker exclusions before
+detail calls. Distinct requisitions survive even when company/title match; semantic
+near-duplicates and the following profile-specific gates still require judgment.
 
 1. Normalize each candidate's URL deterministically with `<PYTHON> tools/job_state.py
    normalize-url --url "<url>"`: lowercase the host, remove fragments and documented
@@ -152,6 +198,13 @@ the cheapest point in the workflow, so eliminate work here before spending a det
 
 For each survivor from Step 1.5:
 
+Keep full detail output in files/tool storage. For browser sources, extract the selected
+posting's text or result cards; use whole accessibility trees only to locate controls
+initially or recover a changed layout. Never dump the entire browser state after each
+action. Save extracted posting text without retyping it in a model-generated patch.
+For HTML captures, select the actual posting container first and use the pipeline's
+HTML extraction before analysis; never send raw pages/scripts/navigation to the model.
+
 **From CLI results:** Search output already includes title, company, location, date,
 and URL. For jobs worth a deeper look, fetch full detail with that portal's `detail`
 command (see its SKILL.md — do not guess flags) to extract **key requirements**,
@@ -167,7 +220,12 @@ looks identical to a job never seen, and the recorded status is what makes a lat
 ghost report self-triaging. `isActive: true` is only the absence of that banner, not
 proof the posting is open; deadlines and dead URLs remain `/rank`'s job.
 
-**From WebSearch results:** Use `WebFetch` on the posting URL and extract the same
+**From Indeed discovery results:** Never fetch the Indeed URL. Search for the exact title
+and company, fetch the matching employer/ATS posting, and extract the same fields from
+that authoritative page. If no matching page is available, drop the lead as specified in
+Step 1d.
+
+**From other WebSearch results:** Use `WebFetch` on the posting URL and extract the same
 fields manually. If it returns HTTP 403, retry with browser headers via curl per
 `.claude/skills/job-application-assistant/09-web-research.md` before giving up — most
 bank and corporate sites reject WebFetch's user agent while serving browsers normally.
@@ -183,7 +241,11 @@ When an aggregator result leads to an active employer posting, use the employer 
 as `url` and retain the discovery URL as `discovered_url`. Verify the resolved content
 matches the expected company and title before accepting it.
 
-For every successfully fetched survivor, derive its cache filename with
+For every successfully fetched survivor, use `scrape_pipeline.py persist` with a
+`snapshot_source` file, dry-run first, then `--write`. It stores full posting text, hashes
+the exact bytes written, and atomically updates state; its content-qualified snapshot
+names keep previous snapshots valid if interrupted. Do not generate a persistence or
+hash-repair script during a scrape. The existing single-file alternative is to derive its cache filename with
 `<PYTHON> tools/job_state.py snapshot-path --url "<canonical-url>"`, then save the **full
 posting text verbatim** at the returned path. Run
 `<PYTHON> tools/job_state.py snapshot-hash --path "<returned-path>"` after writing it and
@@ -215,6 +277,23 @@ the full posting and extract its required/preferred requirements with quoted evi
 Persist PASS/FLAG/FAIL plus notes. A FAIL is removed before scoring; a material FLAG is
 scored but visible. Do not create a second high/medium/low quick-fit score; `/rank` owns
 all scoring.
+
+The target-scope gate includes the profile's education and level alignment. Do not use a
+college-degree requirement as a hard discovery filter: roles without one remain eligible
+when their actual duties and progression match the target professional work. From the full
+posting, FAIL clear likely underemployment or mandatory requirements materially beyond the
+candidate's evidenced level, and FLAG an ambiguous boundary for `/rank` to surface.
+
+Read full text through `scrape_pipeline.py packet`, one job at a time, following every
+`next_part` before final gates/scoring. Packets preserve all posting text, including late
+restrictions; they are not keyword-only summaries. For a multi-part job retain a compact
+requirements/evidence checklist between parts, including conflicts and unresolved flags.
+Pass that same evidence into Step 4.25 instead of rereading the full posting. Process a
+bounded batch (default five jobs or 12,000 posting characters, whichever comes first);
+persist results before the next batch. Do not accumulate previous batches' full text or
+print stored detail objects after compaction. Use supported context compaction/checkpoints
+with keys and unresolved evidence only when necessary; never claim that paging itself
+clears the runtime's conversation history.
 
 ### Step 4: Deduplicate & Store
 
@@ -277,11 +356,18 @@ Routine discovery, fetches, and triage do not add an independent reviewer.
 Follow `.claude/commands/rank.md` Steps 1-4 in **from-scrape mode**, scoped only to fetched
 full-gate-PASS/FLAG entry keys whose current status is exactly `new` (including recovered
 pending entries). Never pass skipped or snapshot-less keys. Ranking is part of every normal scrape; do not make the user
-run a second command. Pass each scoring worker the verified snapshot text inline and use
+run a second command. Pass each scoring worker only the current job/batch's verified snapshot packets inline and use
 the compact rubric already loaded in Step 0. A valid <=24-hour snapshot is read locally,
 so the scoring worker does not fetch the posting again. Persist the normal `/rank` fields
 and mark scored entries `ranked`; dead or vetoed entries receive the same treatment as a
 standalone `/rank` run.
+
+Use `scrape_pipeline.py cache` to reuse a completed analysis only when the fresh verified
+snapshot, profiles, search preferences, and rubric fingerprint match. Explicit `--all`
+recalibration bypasses analysis reuse. The full-posting gate/evidence pass and ranking
+share one analysis; do not add a separate quick-fit model pass. Cache hits still go
+through the existing deadline sweep, location ordering, and final live check.
+Persist completed updates with the batch helper, preserving normal `/rank` fields.
 
 `/rank` remains available for `--all`, a focus rerun, or recalibration after the profile
 changes. It is not a required handoff after `/scrape`.
@@ -310,6 +396,13 @@ LinkedIn people-search result pages programmatically. Never fabricate contacts o
 specific person was found; these are search links, not results.
 
 ### Step 4.6: Final Live Availability Check
+
+First run `<PYTHON> tools/scrape_pipeline.py queue --base <BASE> --output
+<run>/active_queue.json`, then read every bounded page of that file. This is the only
+allowed source for the carry-forward active opportunity queue. It joins current ranked
+state to `job_search_tracker.csv` and excludes jobs already drafted, applied, advanced,
+or finally resolved, including tracker updates made after an earlier scrape. Never select
+the Step 5 shortlist directly from raw `seen_jobs.json`.
 
 Immediately before presenting the shortlist, use Step 2's successful current-run employer
 fetch as live-open evidence. Recheck only a reused entry whose availability proof is older
@@ -348,8 +441,8 @@ ranking to discover that a source produced unusable rows.
 
 Present the ranked shortlist, not the pre-ranking search pool.
 
-Select from the active opportunity queue: today's ranked jobs plus still-open, undismissed,
-untracked ranked jobs from earlier runs. Mark today's rows `NEW`. Apply the canonical
+Select from the generated `active_queue.json`: today's ranked jobs plus still-open,
+undismissed, untracked ranked jobs from earlier runs. Mark today's rows `NEW`. Apply the canonical
 profile's geographic priorities through `/rank`'s separate `geographic_priority` field:
 present at most three preferred-remote/preferred-region **Apply first** jobs scoring 60+
 and up to two backups. Also show any 75+ Strong Fit outside-preference roles in the labeled
@@ -370,6 +463,10 @@ running it (and covers it via the Step 1c fallback) until it is fixed - only
 edit the toggle with the user's confirmation, and never edit anything else in
 the skill.
 
+When the Indeed lane runs, report `discovery (websearch): Indeed`; this distinguishes a
+deliberate discovery-only source from a failed portal CLI fallback. Indeed-discovered jobs
+still appear only after employer/ATS verification and pass through the standard workflow.
+
 ```
 ## Ranked Job Shortlist - YYYY-MM-DD
 
@@ -378,6 +475,8 @@ Found X new positions; ranked Y; showing Z actionable opportunities from the act
 skipped (disabled): <portal-name>, <portal-name>
 
 fallback (websearch): <portal-name>, <portal-name>
+
+discovery (websearch): Indeed
 
 health: <portal-name> - degraded (company null on all 12 results); parsing anchors in .agents/skills/<portal-name>/url-reference.md
 health: <portal-name> - broken (0 results for the SKILL.md test query and a broader retry); parsing anchors in .agents/skills/<portal-name>/url-reference.md
@@ -419,7 +518,8 @@ user says they applied outside that path, use `/outcome`'s normal add/update flo
    treat all other commute, relocation, hybrid, travel, and scheduling details case by case.
 4. **Only open positions.** Skip postings with expired deadlines or those marked as closed.
 5. **Be efficient with detail fetches.** Step 1.5 deduplication and gates happen before every `detail` or WebFetch call. Fetch each survivor once, store its snapshot, and reuse it in `/rank` and `/apply` while fresh.
-6. **Parallel searches.** Run portal CLI searches in parallel; use WebSearch only for gaps the CLIs don't cover.
+6. **Parallel searches.** Run portal CLI searches in parallel and keep the direct-employer,
+   Indeed-discovery, and failure-fallback WebSearch work bounded as defined in Step 1.
 7. **No automated people lookups.** Referral contacts (Step 4.5) are on-demand LinkedIn search links only - never fetch or scrape LinkedIn people-search result pages programmatically.
 8. **Health checks are bounded and honest.** Step 4.75 spends at most one probe, one retry, and (in `health` mode) one detail fetch per portal - a diagnosis, not a crawl. A rate-limit is never evidence of breakage. Health verdicts come only from observed CLI output; a portal that could not be tested is reported as inconclusive, never guessed. The `enabled` toggle is the only thing the health check may edit, and only with confirmation.
 9. **Flag distribution patterns, never accuse.** The mass-posting signal (Step 2.5) describes how a listing is being distributed, not a claim that the employer is a scam. Never name a company as fraudulent or untrustworthy - present the observation and let the user decide.

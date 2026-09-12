@@ -25,7 +25,7 @@ except ImportError:
 
 REPO = Path(__file__).resolve().parent.parent
 COMMANDS = REPO / ".claude" / "commands"
-APPLY = COMMANDS / "apply.md"
+APPLY = REPO / ".claude/skills/job-application-assistant/references/apply-workflow.md"
 OUTCOME = COMMANDS / "outcome.md"
 GMAIL_SYNC = COMMANDS / "gmail-sync.md"
 HTML_REPORT = COMMANDS / "html-report.md"
@@ -278,6 +278,16 @@ class ApplyRecordsVerifiedSubmission(unittest.TestCase):
             "do not mark the\napplication `applied`",
         ):
             self.assertIn(needle, self.step)
+
+    def test_form_edits_are_direct_and_dry_run_is_local_state_only(self):
+        boundary = section(APPLY, "### Portal Form vs. Local-State Boundary")
+        for needle in (
+            "do **not** require a simulated dry run",
+            "applies only to local state-writing helpers",
+            "does not apply to browser-form edits",
+        ):
+            self.assertIn(needle, boundary)
+        self.assertIn("Do not call it a form dry run", self.step)
 
     def test_verified_branch_records_only_submitted_artifacts_and_outcome(self):
         for needle in (

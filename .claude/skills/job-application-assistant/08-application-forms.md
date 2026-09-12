@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.3
+framework_version: 1.0.4
 ---
 
 # Application Form Fields
@@ -11,6 +11,14 @@ submitted documents do not cover, under a character or word limit, in a box with
 formatting.
 
 This file governs that third artifact. It is not a document you compile; it is text the candidate pastes.
+
+## Portal editing boundary
+
+When `/apply` is operating the actual portal, fill and correct ordinary fields directly
+and verify the saved values in the form. Do not simulate the change first, enter the same
+answer twice, or call a portal edit a dry run. Final submission still requires the
+workflow's action-time confirmation. Any dry-run command mentioned by `/apply` is for the
+local tracker or application archive, not the employer's form.
 
 ## When this applies
 

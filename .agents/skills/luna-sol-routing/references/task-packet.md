@@ -13,6 +13,13 @@ command's bounded context budget rather than this review-packet cap.
 
 ## Evidence boundary
 
+For `/apply`, reuse the validated `application_state_v1` requirement/evidence IDs and
+exact selected excerpts. Do not serialize the full state when a smaller review packet
+suffices. The packet supplements the owner's conversation; it does not remove retained
+history. After actual compaction, reconstruct from validated state rather than assuming
+the full profile or old draft survived. Record resolved edits and outstanding flags,
+then stop carrying obsolete critique text into routine build/state operations.
+
 For job reviews add `workflow_stage`, `posting_metadata`, `requirement_excerpts`,
 `candidate_evidence` (IDs plus grounded excerpts), `gate_verdicts`, and only the
 needed `draft_excerpts`. Include all decisive requirements; never send the full posting.

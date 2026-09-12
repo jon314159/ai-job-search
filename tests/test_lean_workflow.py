@@ -7,7 +7,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SCRAPER = REPO / ".claude" / "skills" / "job-scraper" / "SKILL.md"
 RANK = REPO / ".claude" / "commands" / "rank.md"
-APPLY = REPO / ".claude" / "commands" / "apply.md"
+APPLY = REPO / ".claude/skills/job-application-assistant/references/apply-workflow.md"
 OUTCOME = REPO / ".claude" / "commands" / "outcome.md"
 GMAIL = REPO / ".claude" / "commands" / "gmail-sync.md"
 PROFILE = (
@@ -36,6 +36,14 @@ class LeanSearchPipelineTests(unittest.TestCase):
         self.assertIn("Before any `detail` or WebFetch call", section)
         self.assertIn("tracker row", section)
         self.assertIn("requisition/canonical URL", section)
+
+    def test_scrape_builds_tracker_filtered_queue_before_shortlist(self):
+        live_check = self.scraper.index("### Step 4.6: Final Live Availability Check")
+        presentation = self.scraper.index("### Step 5: Present Results")
+        section = self.scraper[live_check:presentation]
+        self.assertIn("scrape_pipeline.py queue", section)
+        self.assertIn("job_search_tracker.csv", section)
+        self.assertIn("Never select", section)
 
     def test_snapshot_contract_is_persisted(self):
         for field in (

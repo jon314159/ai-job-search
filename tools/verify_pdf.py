@@ -51,6 +51,34 @@ def normalize_text(text):
     return " ".join(text.split())
 
 
+def text_checks(text, required_text=()):
+    issues = []
+    if re.search(r"\(cid:\d+\)|\ufffd", text):
+        issues.append("garbage_or_replacement_characters")
+    if not normalize_text(text):
+        issues.append("empty_text")
+    for value in required_text:
+        if normalize_text(value) not in normalize_text(text):
+            issues.append("missing_literal: " + value)
+    return issues
+
+
+def keyword_matches(text, requirements):
+    normalized = normalize_text(text).casefold()
+    results = []
+    for requirement in requirements:
+        terms = requirement.get("terms", [])
+        matches = []
+        for term in terms:
+            match = re.search(r"(?<!\w)" + re.escape(normalize_text(term).casefold()) + r"(?!\w)", normalized)
+            if match:
+                matches.append({"term": term, "offset": match.start()})
+        results.append({"id": requirement["id"], "priority": requirement["priority"],
+                        "literal_matches": matches, "status": "literal" if matches else "needs_owner_review",
+                        "coverage": requirement["coverage"]})
+    return results
+
+
 def _extract_pypdf(pdf_path):
     """Return (text, pages) or None if pypdf is unavailable, raises, or yields no text."""
     try:

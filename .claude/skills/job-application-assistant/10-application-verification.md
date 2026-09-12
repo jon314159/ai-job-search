@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.0
+framework_version: 1.0.1
 ---
 
 # Application Artifact Verification
@@ -45,7 +45,10 @@ Report each applicable item as pass or fail. Mark cover-letter-only items
 
 ## ATS and keyword verification
 
-Run `tools/verify_pdf.py` with the resolved Python interpreter and dump the resume's
+Reuse the current `application_verification_v1` receipt and its extracted text when
+source, PDF, active contract and evidence hashes still match. Do not run extraction
+again merely because Step 5 ended. If no current receipt exists, run
+`tools/verify_pdf.py` with the resolved Python interpreter and dump the resume's
 text layer. Use `pdftotext -layout -enc UTF-8` as the documented fallback. If neither
 extractor is available, report that limitation and perform the remaining keyword check
 from the visually inspected PDF; do not claim text-layer verification.

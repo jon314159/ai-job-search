@@ -183,5 +183,38 @@ class PortalDiscoveryContractTests(unittest.TestCase):
             self.assertRegex(compact, r"Generic (?:Denmark )?job discovery routes", skill.name)
 
 
+class IndeedDiscoveryContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        cls.section = cls.text.split("#### 1d. Indeed discovery", 1)[1].split(
+            "### Step 1.5", 1
+        )[0]
+
+    def test_indeed_is_a_bounded_websearch_lane_not_a_portal_cli(self):
+        compact = " ".join(self.section.split())
+        self.assertIn('site:indeed.com/viewjob "<role terms>"', compact)
+        self.assertIn("at most one WebSearch query", compact)
+        self.assertIn("at most 10 relevant results", compact)
+        self.assertIn("14-day search recency filter", compact)
+        self.assertFalse((REPO_ROOT / ".agents" / "skills" / "indeed-search").exists())
+
+    def test_indeed_pages_are_never_fetched_or_used_as_authoritative_postings(self):
+        for requirement in (
+            "Do not fetch or crawl Indeed listing pages",
+            "Never fetch the Indeed URL",
+            "first goes through Step 1.5's cheap",
+            "employer/ATS posting",
+            "drop the lead",
+            "authoritative_url",
+            "discovered_url",
+        ):
+            self.assertIn(requirement, self.text)
+
+    def test_indeed_jobs_rejoin_the_standard_workflow_after_verification(self):
+        self.assertIn("pass through the standard workflow", self.text)
+        self.assertIn("discovery (websearch): Indeed", self.text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -40,7 +40,7 @@ OUTCOME = COMMANDS / "outcome.md"
 GMAIL_SYNC = COMMANDS / "gmail-sync.md"
 HTML_REPORT = COMMANDS / "html-report.md"
 NOTION_SYNC = COMMANDS / "notion-sync.md"
-APPLY = COMMANDS / "apply.md"
+APPLY = REPO / ".claude/skills/job-application-assistant/references/apply-workflow.md"
 INTERVIEW = COMMANDS / "interview.md"
 
 VOCAB_ANCHOR = "## Tracker status vocabulary"
